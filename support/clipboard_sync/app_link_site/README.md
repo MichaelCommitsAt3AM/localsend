@@ -18,13 +18,14 @@ Required public endpoints:
 - `https://localsend.currenta.tech/.well-known/assetlinks.json`: HTTP 200,
   `application/json`, without authentication, interstitials or redirects.
 
-The supplied association authorizes **only this debug package and this machine's
-actual APK signing certificate**. It was extracted from the installed build using
-`apksigner verify --print-certs`. It is not the clipboard certificate fingerprint.
-For a production release, replace/extend the association with the fork's real
-release application ID and release signing certificate; do not authorize an
-upstream package using guessed certificate data. Remove the debug association
-from the production hostname after developer testing.
+The supplied association covers the existing debug package/signer and the fork's
+release package `org.localsend.localsend_app`, using the public certificate from
+the permanent fork release key generated on 2026-10-13. This is not the clipboard
+certificate fingerprint and does not authorize upstream LocalSend's signer.
+Deploy this updated file before testing camera pairing on the first release APK.
+The debug association can be removed when developer testing ends. Preserve the
+release key for future APK updates; do not replace its fingerprint with a guessed
+or temporary signing certificate.
 
 Do not enable analytics, Zaraz or third-party script injection for this site.
 Pairing credentials live only in the URL fragment, which the browser does not
