@@ -39,19 +39,42 @@ key, increase the version code, and keep using universal APKs for this workflow;
 switching from split-ABI version-code schemes requires a deliberate migration.
 Certificate rotation is not currently supported by the pre-install check.
 
+## Fork version and Android identity
+
+This fork starts at `1.0.0+65` in `app/pubspec.yaml`, independently of upstream's
+version sequence. Use `v1.0.0` for its first release tag. Increase the public
+semantic version and the numeric build code for each published release; never
+reset or reuse the Android version code. For example, `1.0.1+66` is a bug-fix
+release and `1.1.0+67` can introduce new features. Keep the CLI and Inno installer
+versions synchronized with the public version.
+
+At the owner's request, the release Android application ID remains
+`org.localsend.localsend_app`; debug builds use `org.localsend.localsend_app.debug`.
+The fork uses its own permanent release signing key. A fork release cannot update
+or coexist with official LocalSend on Android because they share a package ID
+and have different signers. Uninstall official LocalSend before installing the
+fork; uninstalling removes its app data. Existing debug builds are separate and
+cannot be upgraded in place by a release APK. Clipboard pairing and permissions
+must be configured for the new release installation.
+
+Windows uses the fork's separate installer identity and directory. The updater
+checks only this fork's repository; upstream's version numbers do not determine
+fork update ordering. Do not publish unchanged upstream artifacts into the fork's
+release feed.
+
 ## Asset naming contract
 
 Tags are `vMAJOR.MINOR.PATCH` and must match `app/pubspec.yaml`. Bump the semantic
 version and build number for each public release. Also update the CLI version
 and the upstream Inno version as required by repository CI.
 
-Use these exact names, replacing `1.19.0` with the tag's version:
+Use these exact names, replacing `1.0.0` with the tag's version:
 
 | Target | Asset name |
 | --- | --- |
-| Windows x64 | `LocalSend-1.19.0-windows-x86-64.exe` |
-| Windows ARM64, when built | `LocalSend-1.19.0-windows-arm-64.exe` |
-| Android universal | `LocalSend-1.19.0-android-universal.apk` |
+| Windows x64 | `LocalSend-1.0.0-windows-x86-64.exe` |
+| Windows ARM64, when built | `LocalSend-1.0.0-windows-arm-64.exe` |
+| Android universal | `LocalSend-1.0.0-android-universal.apk` |
 
 The client also recognizes explicit architecture-specific APK aliases defined
 in `GitHubReleaseClient`. It never guesses the first EXE, ZIP, DEB or arbitrary

@@ -81,7 +81,7 @@ Clipboard support is separate from upstream LocalSend's platform support:
 
 ### Clipboard Setup
 
-1. Install this fork on both devices and keep them on the same reachable local network. Official LocalSend builds do not include this clipboard feature.
+1. Install this fork on both devices and keep them on the same reachable local network. Official LocalSend builds do not include this clipboard feature. On Android, uninstall official LocalSend before installing this fork's release APK: they share an application ID but use different signing keys, so they cannot coexist or update one another. Uninstalling removes the official app's data.
 2. On Android, [install Shizuku](https://shizuku.rikka.app/download/) and start it using [wireless debugging or a computer](https://shizuku.rikka.app/guide/setup/). In LocalSend, **Settings > Clipboard sync > More > Setup tutorial** walks through installation, starting Shizuku, permissions and pairing. Use **Android permissions** to authorize LocalSend and allow notifications. Start Shizuku again after a phone reboot.
 3. On Windows, open **Settings > Clipboard sync > Add device**. Scan the QR code with LocalSend on your phone, or with its normal camera on the configured Android debug build. Compare the displayed codes and confirm on both devices. You can also select a nearby device. Pairing alone does not enable sharing.
 4. Turn on **Share clipboard** on both devices and accept the sharing confirmation. A green dot beside a device means its clipboard connection is active. Copy new text on one device and paste on the other.
@@ -114,6 +114,8 @@ Clipboard sharing uses its own securely stored device identity, pinned mutual TL
 See the [development build guide](support/clipboard_sync/WINDOWS_ANDROID_DEBUG.md) for detailed behavior and testing, the [recorded results](support/clipboard_sync/DEBUG_RESULTS.md) for validation evidence, and the [implementation roadmap](support/clipboard_sync/README.md) for the remaining Windows/Android local-network hardening work and deferred platform scope.
 
 ### Fork Builds and Updates
+
+This fork uses its own version sequence, starting at `1.0.0+65` (release tag `v1.0.0`). Public releases increase both the semantic version and Android build number. The Android release application ID remains `org.localsend.localsend_app`; debug builds retain the `.debug` suffix. See the [versioning and signing guide](support/updater/README.md#fork-version-and-android-identity) for installation and update compatibility.
 
 Use the Flutter version pinned in [.fvmrc](.fvmrc) through FVM, plus the Rust and native platform build tools. From `app/`:
 
