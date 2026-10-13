@@ -12,7 +12,7 @@
   #define TargetArchitecture "x64"
 #endif
 #if TargetArchitecture == "arm64"
-  #define ArchitectureName "arm64"
+  #define ArchitectureName "arm-64"
 #else
   #define ArchitectureName "x86-64"
 #endif
