@@ -53,8 +53,17 @@ jobs:
           flutter-version: ${{ needs.metadata.outputs.flutter }}
           cache: true
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install Inno Setup 6
-        run: choco install innosetup --version=6.7.3 --yes --no-progress
+      - name: Install pinned Inno Setup 6
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+          $destination = Join-Path $env:RUNNER_TEMP 'inno-setup-6'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $installer
+          $expected = '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732'
+          if ((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expected) { throw 'Inno Setup download checksum mismatch' }
+          $process = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', ('/DIR="' + $destination + '"')) -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed: $($process.ExitCode)" }
+          if (-not (Test-Path -LiteralPath (Join-Path $destination 'ISCC.exe'))) { throw 'Inno Setup compiler is missing' }
       - name: Prepare build-time MSIX helper
         shell: pwsh
         run: |
@@ -79,7 +88,7 @@ jobs:
           Copy-Item -Path 'app/build/windows/x64/runner/Release/*' -Destination $payload -Recurse
           Copy-Item -Path 'support/build/windows/x64/*' -Destination $payload
           Copy-Item -LiteralPath 'app/assets/packaging/logo.ico' -Destination $payload
-          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          $compiler = Join-Path $env:RUNNER_TEMP 'inno-setup-6/ISCC.exe'
           if (-not (Test-Path -LiteralPath $compiler)) { throw 'Inno Setup 6 is required on the runner' }
           & $compiler "/DMyAppVersion=$env:VERSION" "/DPayloadDir=$payload" "/DResultDir=$result" support/scripts/fork_windows_installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
