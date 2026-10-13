@@ -265,8 +265,8 @@ class Translations$clipboardSync$en {
   /// en: 'On your phone, open Add device and scan this QR code. Keep both devices on the same network.'
   String get qrInstructions => 'On your phone, open Add device and scan this QR code. Keep both devices on the same network.';
 
-  /// en: 'Or open Add device on both devices, then select a nearby device below.'
-  String get nearbyInstructions => 'Or open Add device on both devices, then select a nearby device below.';
+  /// en: 'Or select a nearby device below to send a pairing request. Keep LocalSend open on the other device.'
+  String get nearbyInstructions => 'Or select a nearby device below to send a pairing request. Keep LocalSend open on the other device.';
 
   /// en: 'Nearby devices'
   String get nearby => 'Nearby devices';
@@ -279,6 +279,54 @@ class Translations$clipboardSync$en {
 
   /// en: 'This invitation expires in {seconds} seconds.'
   String expires({required Object seconds}) => 'This invitation expires in ${seconds} seconds.';
+
+  /// en: '{device} wants to pair'
+  String pairingRequest({required Object device}) => '${device} wants to pair';
+
+  /// en: 'Accept only if you are connecting these devices. The other device must enter the code displayed here. Successful pairing turns on clipboard and copied-image sharing on both devices.'
+  String get requestDescription =>
+      'Accept only if you are connecting these devices. The other device must enter the code displayed here. Successful pairing turns on clipboard and copied-image sharing on both devices.';
+
+  /// en: 'Accept request'
+  String get acceptRequest => 'Accept request';
+
+  /// en: 'Decline'
+  String get declineRequest => 'Decline';
+
+  /// en: 'Enter this code on the other device'
+  String get displayCodeTitle => 'Enter this code on the other device';
+
+  /// en: 'Type this code on the device you want to pair. Share it only with someone you want to give access to your clipboard.'
+  String get displayCodeInstructions =>
+      'Type this code on the device you want to pair. Share it only with someone you want to give access to your clipboard.';
+
+  /// en: 'This code expires with the pairing request and allows three attempts.'
+  String get codeExpiry => 'This code expires with the pairing request and allows three attempts.';
+
+  /// en: 'Enter the other device's code'
+  String get enterCodeTitle => 'Enter the other device\'s code';
+
+  /// en: 'On the device you selected, accept the pairing request and read its 8-digit code. Enter that code here to pair and turn on clipboard and copied-image sharing on both devices.'
+  String get enterCodeInstructions =>
+      'On the device you selected, accept the pairing request and read its 8-digit code. Enter that code here to pair and turn on clipboard and copied-image sharing on both devices.';
+
+  /// en: '8-digit code'
+  String get pairingCodeLabel => '8-digit code';
+
+  /// en: 'Verify and pair'
+  String get confirmCode => 'Verify and pair';
+
+  /// en: 'Enter all 8 digits.'
+  String get codeLengthError => 'Enter all 8 digits.';
+
+  /// en: 'Incorrect code. Check the other device and try again.'
+  String get incorrectCode => 'Incorrect code. Check the other device and try again.';
+
+  /// en: 'Waiting for the other device to accept...'
+  String get waitingForAcceptance => 'Waiting for the other device to accept...';
+
+  /// en: 'Verifying pairing code...'
+  String get verifyingCode => 'Verifying pairing code...';
 
   /// en: 'Do these codes match?'
   String get verifyCode => 'Do these codes match?';
@@ -295,11 +343,13 @@ class Translations$clipboardSync$en {
   /// en: 'Device paired'
   String get paired => 'Device paired';
 
-  /// en: 'Pairing is saved on both devices. Enable clipboard sync on each when you are ready.'
-  String get pairedInstructions => 'Pairing is saved on both devices. Enable clipboard sync on each when you are ready.';
+  /// en: 'Pairing is saved. Clipboard and copied-image sharing are turned on automatically on both devices. Allow any requested permissions to start sharing.'
+  String get pairedInstructions =>
+      'Pairing is saved. Clipboard and copied-image sharing are turned on automatically on both devices. Allow any requested permissions to start sharing.';
 
-  /// en: 'Pairing could not finish. Check that both devices are on the same network and have Add device open, then try again.'
-  String get pairingFailed => 'Pairing could not finish. Check that both devices are on the same network and have Add device open, then try again.';
+  /// en: 'Pairing could not finish. Keep LocalSend open on both devices, check the network and firewall, and try again. Both devices need a version that supports code entry.'
+  String get pairingFailed =>
+      'Pairing could not finish. Keep LocalSend open on both devices, check the network and firewall, and try again. Both devices need a version that supports code entry.';
 
   /// en: 'This pairing invitation expired. Create a new one to try again.'
   String get pairingExpired => 'This pairing invitation expired. Create a new one to try again.';
@@ -418,9 +468,9 @@ class Translations$clipboardSync$en {
   /// en: 'Connect your devices'
   String get pairTitle => 'Connect your devices';
 
-  /// en: 'Keep both devices on the same network. On your computer, open Clipboard sync and tap Add device. Scan its QR code with your phone camera or LocalSend. Compare the codes and confirm on both devices.'
+  /// en: 'Keep both devices on the same network. On your computer, open Clipboard sync and tap Add device. Scan its QR code with your phone camera or LocalSend, or select the computer from Nearby devices. Accept the request on the computer, then enter the code it displays on your phone.'
   String get pairBody =>
-      'Keep both devices on the same network. On your computer, open Clipboard sync and tap Add device. Scan its QR code with your phone camera or LocalSend. Compare the codes and confirm on both devices.';
+      'Keep both devices on the same network. On your computer, open Clipboard sync and tap Add device. Scan its QR code with your phone camera or LocalSend, or select the computer from Nearby devices. Accept the request on the computer, then enter the code it displays on your phone.';
 
   /// en: 'Start sharing'
   String get shareTitle => 'Start sharing';

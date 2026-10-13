@@ -64,6 +64,8 @@ abstract class RsClipboardPairing implements RustOpaqueInterface {
   Future<void> persisted({required bool saved});
 
   Future<void> stop();
+
+  Future<void> submitCode({required String code});
 }
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<RsClipboardRuntime>>

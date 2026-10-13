@@ -164,6 +164,9 @@ impl RsClipboardPairing {
     pub async fn approve(&self, approved: bool) -> anyhow::Result<()> {
         self.inner.approve(approved)
     }
+    pub async fn submit_code(&self, code: String) -> anyhow::Result<()> {
+        self.inner.submit_code(code)
+    }
     pub async fn persisted(&self, saved: bool) -> anyhow::Result<()> {
         self.inner.persisted(saved)
     }

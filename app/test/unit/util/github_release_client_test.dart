@@ -156,6 +156,28 @@ void main() {
     expect(GitHubReleaseClient.findTargetAsset(release, TargetPlatform.macOS, architecture: 'arm64')!.name, endsWith('macos-universal.dmg'));
     expect(GitHubReleaseClient.findTargetAsset(release, TargetPlatform.android, architecture: 'x64')!.name, endsWith('android-x64.apk'));
   });
+  test('Android prefers a matching split APK and falls back to universal for older releases', () {
+    final release = AppRelease(
+      version: '1.19.0',
+      tagName: 'v1.19.0',
+      name: '',
+      body: '',
+      htmlUrl: '',
+      publishedAt: null,
+      assets: [
+        'universal',
+        'arm64-v8a',
+        'armeabi-v7a',
+        'x86_64',
+      ].map((abi) => AppReleaseAsset(name: 'LocalSend-1.19.0-android-$abi.apk', downloadUrl: '', size: 1, contentType: '')).toList(),
+    );
+    for (final entry in {'arm64': 'arm64-v8a', 'arm32v7': 'armeabi-v7a', 'x64': 'x86_64', 'x86': 'universal'}.entries) {
+      expect(
+        GitHubReleaseClient.findTargetAsset(release, TargetPlatform.android, architecture: entry.key)!.name,
+        'LocalSend-1.19.0-android-${entry.value}.apk',
+      );
+    }
+  });
   test('direct updates require a pinned repository URL, bounded size and GitHub SHA-256 digest', () {
     final client = GitHubReleaseClient();
     final release = AppRelease(version: '1.19.0', tagName: 'v1.19.0', name: '', body: '', htmlUrl: '', publishedAt: null, assets: []);

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -6,15 +8,72 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localsend_app/gen/strings.g.dart';
+import 'package:localsend_app/pages/settings/clipboard_pairing_page.dart';
 import 'package:localsend_app/pages/settings/clipboard_sync_page.dart';
 import 'package:localsend_app/pages/settings/clipboard_sync_tutorial_page.dart';
 import 'package:localsend_app/provider/clipboard_sync_provider.dart';
+import 'package:localsend_app/provider/favorites_provider.dart';
+import 'package:localsend_app/provider/logging/discovery_logs_provider.dart';
+import 'package:localsend_app/provider/network/nearby_devices_provider.dart';
+import 'package:localsend_app/provider/persistence_provider.dart';
+import 'package:localsend_isolates/isolate.dart';
+import 'package:localsend_isolates/rust/api/clipboard.dart';
 import 'package:refena_flutter/refena_flutter.dart';
+
+import '../mocks.mocks.dart';
+
+class _Persistence extends MockPersistenceService {
+  @override
+  bool getAlwaysOnTop() => false;
+}
+
+class _Isolates extends Fake implements IsolateController {}
+
+class _PairingSession extends Fake implements RsClipboardPairing {
+  final update = Completer<RsPairingUpdate?>();
+  @override
+  Future<String?> invitation() async => jsonEncode({
+    'version': 2,
+    'kind': 'localsend-clipboard-pair',
+    'fingerprint': 'A' * 64,
+    'port': 53319,
+    'addresses': ['192.0.2.1'],
+    'token': 'B' * 64,
+    'expires': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 180,
+  });
+  @override
+  Future<RsPairingUpdate?> nextUpdate({required BigInt after}) => update.future;
+  @override
+  Future<void> stop() async {
+    if (!update.isCompleted) update.complete(null);
+  }
+}
 
 class _Controller extends ClipboardSyncController {
   final ClipboardSyncState? initialState;
   int authorizationCalls = 0;
   bool authorized = true;
+  final pairingSession = _PairingSession();
+  final enableCalls = <bool>[];
+  @override
+  Future<RsClipboardPairing> hostPairing({required String name}) async => pairingSession;
+  @override
+  Future<void> savePairing(RsPairingUpdate update, {required bool pending}) async {
+    state = ClipboardSyncState(
+      ready: true,
+      enabled: !pending,
+      syncImages: !pending,
+      hasEnabledBefore: state.hasEnabledBefore,
+      peers: [ClipboardPeer(fingerprint: update.fingerprint, address: update.address, pending: pending)],
+    );
+  }
+
+  @override
+  Future<void> setEnabled(bool value) async {
+    enableCalls.add(value);
+    state = ClipboardSyncState(ready: true, enabled: value, peers: state.peers, hasEnabledBefore: state.hasEnabledBefore);
+  }
+
   @override
   Future<bool> authorize() async {
     authorizationCalls++;
@@ -82,6 +141,7 @@ void main() {
     expect(container.read(clipboardSyncProvider), same(state));
     expect(find.text('${t.clipboardSync.pairedDevices}: 1'), findsOneWidget);
     expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile).first).onChanged, isNotNull);
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile).last).onChanged, isNotNull);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     visible.dispose();
@@ -167,7 +227,7 @@ void main() {
     container.disposeContainer();
   });
 
-  testWidgets('first device setup explains why sharing is disabled and retains the add device action', (tester) async {
+  testWidgets('first device switch prompts for a device and cancelling leaves sharing off', (tester) async {
     final container = RefenaContainer(
       overrides: [clipboardSyncProvider.overrideWithNotifier((_) => _Controller(const ClipboardSyncState(ready: true)))],
     );
@@ -178,12 +238,85 @@ void main() {
       ),
     );
     expect(find.text(t.clipboardSync.noDevicesHint), findsOneWidget);
-    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile).first).onChanged, isNull);
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile).first).onChanged, isNotNull);
+    expect(tester.widget<SwitchListTile>(find.byType(SwitchListTile).last).onChanged, isNull);
     expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, t.clipboardSync.addDevice)).onPressed, isNotNull);
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(container.read(clipboardSyncProvider).enabled, false);
+    await tester.tap(find.text(t.general.cancel));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(container.read(clipboardSyncProvider).enabled, false);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     container.disposeContainer();
   });
+
+  for (final result in ['cancelled', 'pending', 'complete']) {
+    testWidgets('enable flow keeps sharing off until pairing is complete: $result', (tester) async {
+      final controller = _Controller(const ClipboardSyncState(ready: true, hasEnabledBefore: true));
+      final persistence = _Persistence();
+      final container = RefenaContainer(
+        overrides: [
+          clipboardSyncProvider.overrideWithNotifier((_) => controller),
+          persistenceProvider.overrideWithValue(persistence),
+          nearbyDevicesProvider.overrideWithNotifier(
+            (_) => NearbyDevicesService(
+              isolateController: _Isolates(),
+              favoriteService: FavoritesService(persistence),
+              discoveryLogs: DiscoveryLogger(),
+            ),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        RefenaScope.withContainer(
+          container: container,
+          child: MaterialApp(
+            theme: ThemeData(platform: TargetPlatform.windows),
+            home: const ClipboardSyncPage(),
+          ),
+        ),
+      );
+      await tester.tap(find.byType(SwitchListTile).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.descendant(of: find.byType(BottomSheet), matching: find.text(t.clipboardSync.addDevice)));
+      await tester.pumpAndSettle();
+      expect(find.byType(ClipboardPairingPage), findsOneWidget);
+      expect(controller.enableCalls, isEmpty);
+      final update = RsPairingUpdate(
+        revision: BigInt.one,
+        phase: 'complete',
+        code: '',
+        fingerprint: 'C' * 64,
+        address: '192.0.2.2:53318',
+        name: 'Phone',
+        expires: BigInt.zero,
+      );
+      if (result == 'complete') {
+        controller.pairingSession.update.complete(update);
+        await tester.pumpAndSettle();
+        expect(find.byType(ClipboardPairingPage), findsNothing);
+        expect(find.text(t.clipboardSync.consent), findsNothing);
+        expect(controller.enableCalls, isEmpty);
+        expect(container.read(clipboardSyncProvider).enabled, true);
+        expect(container.read(clipboardSyncProvider).syncImages, true);
+      } else {
+        if (result == 'pending') await controller.savePairing(update, pending: true);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(controller.enableCalls, isEmpty);
+        expect(container.read(clipboardSyncProvider).enabled, false);
+        expect(find.text(t.clipboardSync.consent), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      container.disposeContainer();
+    });
+  }
 
   testWidgets('configuration failure shows understandable guidance instead of appearing as an unexplained disabled page', (tester) async {
     final container = RefenaContainer(

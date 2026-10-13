@@ -73,14 +73,14 @@ class ClipboardSyncPage extends StatelessWidget {
                             title: Text(t.clipboardSync.enable),
                             subtitle: Text(pairedCount == 0 ? t.clipboardSync.addDeviceFirst : t.clipboardSync.textSummary),
                             value: state.enabled,
-                            onChanged: state.ready && (pairedCount > 0 || state.enabled) ? (value) => _setEnabled(context, controller, value) : null,
+                            onChanged: state.ready ? (value) => _setEnabled(context, controller, value) : null,
                           ),
                           const Divider(height: 1, indent: 16, endIndent: 16),
                           SwitchListTile.adaptive(
                             title: Text(t.clipboardSync.syncImages),
                             subtitle: Text(t.clipboardSync.imagesSummary),
                             value: state.syncImages,
-                            onChanged: state.ready ? controller.setSyncImages : null,
+                            onChanged: state.ready && state.enabled ? controller.setSyncImages : null,
                           ),
                         ],
                       ),
@@ -248,6 +248,23 @@ class ClipboardSyncPage extends StatelessWidget {
 
   Future<void> _setEnabled(BuildContext context, ClipboardSyncController controller, bool value) async {
     if (value) {
+      if (!context.ref.read(clipboardSyncProvider).peers.any((peer) => !peer.pending)) {
+        final connect = await _showConnectDevice(context);
+        if (connect != true || !context.mounted) return;
+        await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ClipboardPairingPage(
+              controller: controller,
+              deviceName: context.ref.read(settingsProvider).alias,
+              returnOnPaired: true,
+            ),
+          ),
+        );
+        // Pairing completion enables sharing on each endpoint. Cancellation
+        // leaves it unchanged; do not add a second enable/consent flow here.
+        return;
+      }
       if (Theme.of(context).platform == TargetPlatform.android && !context.ref.read(clipboardSyncProvider).hasEnabledBefore) {
         final action = await _showAndroidSetup(context);
         if (!context.mounted) return;
@@ -271,10 +288,42 @@ class ClipboardSyncPage extends StatelessWidget {
           ],
         ),
       );
-      if (allowed != true) return;
+      if (allowed != true || !context.mounted || !context.ref.read(clipboardSyncProvider).peers.any((peer) => !peer.pending)) return;
     }
     await controller.setEnabled(value);
   }
+
+  Future<bool?> _showConnectDevice(BuildContext context) => showModalBottomSheet<bool>(
+    context: context,
+    useSafeArea: true,
+    isScrollControlled: true,
+    showDragHandle: true,
+    constraints: const BoxConstraints(maxWidth: 720),
+    builder: (context) => SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Icon(Icons.devices_rounded, size: 36, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 16),
+            Text(t.clipboardSync.addDeviceFirst, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 12),
+            Text(t.clipboardSync.noDevicesHint),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.add_rounded),
+              label: Text(t.clipboardSync.addDevice),
+            ),
+            const SizedBox(height: 8),
+            TextButton(onPressed: () => Navigator.pop(context, false), child: Text(t.general.cancel)),
+          ],
+        ),
+      ),
+    ),
+  );
 
   Future<void> _openTutorial(BuildContext context, ClipboardSyncController controller) => Navigator.push<void>(
     context,

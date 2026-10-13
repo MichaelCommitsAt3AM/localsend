@@ -200,8 +200,8 @@ pub fn server_config(
 }
 
 /// Temporary identity enrollment only. These configurations never serve text.
-/// Unknown identities require explicit comparison of the TLS channel binding
-/// and approval on both devices before being persisted as clipboard trust.
+/// Unknown identities require receiver approval and a successful SPAKE2 code
+/// exchange bound to TLS before being persisted as clipboard trust.
 pub(super) fn pairing_configs(
     certificate: &str,
     key: &str,

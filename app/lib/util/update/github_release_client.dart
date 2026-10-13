@@ -38,8 +38,6 @@ class GitHubReleaseClient {
             ? ['windows-arm-64.exe', 'windows-arm64-setup.exe']
             : <String>[],
       TargetPlatform.android => [
-        'android-universal.apk',
-        'android.apk',
         ...switch (arch) {
           'arm64' => ['android-arm64v8.apk', 'android-arm64-v8a.apk'],
           'arm32v7' => ['android-arm32v7.apk', 'android-armeabi-v7a.apk'],
@@ -47,6 +45,8 @@ class GitHubReleaseClient {
           'x86' => ['android-x86.apk'],
           _ => <String>[],
         },
+        'android-universal.apk',
+        'android.apk',
       ],
       TargetPlatform.linux =>
         arch == 'x64'

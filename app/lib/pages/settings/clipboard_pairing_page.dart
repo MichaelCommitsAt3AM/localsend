@@ -9,6 +9,7 @@ import 'package:localsend_app/provider/clipboard_sync_provider.dart';
 import 'package:localsend_app/provider/network/nearby_devices_provider.dart';
 import 'package:localsend_app/provider/network/scan_facade.dart';
 import 'package:localsend_app/util/clipboard_pairing_link.dart';
+import 'package:localsend_app/widget/clipboard/pairing_code_input.dart';
 import 'package:localsend_isolates/rust/api/clipboard.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
 import 'package:refena_flutter/refena_flutter.dart';
@@ -18,7 +19,16 @@ class ClipboardPairingPage extends StatefulWidget {
   final ClipboardSyncController controller;
   final String deviceName;
   final String? initialInvitation;
-  const ClipboardPairingPage({super.key, required this.controller, required this.deviceName, this.initialInvitation});
+  final bool returnOnPaired;
+  final RsClipboardPairing? initialSession;
+  const ClipboardPairingPage({
+    super.key,
+    required this.controller,
+    required this.deviceName,
+    this.initialInvitation,
+    this.returnOnPaired = false,
+    this.initialSession,
+  });
 
   @override
   State<ClipboardPairingPage> createState() => _ClipboardPairingPageState();
@@ -35,17 +45,24 @@ class _ClipboardPairingPageState extends State<ClipboardPairingPage> {
   bool _approved = false;
   int _generation = 0;
   Timer? _timer;
+  final _codeInput = TextEditingController();
+  bool _submittingCode = false;
+  String? _codeError;
 
   @override
   void initState() {
     super.initState();
+    widget.controller.pairingScreenOpened();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _qr != null) setState(() {});
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final invitation = widget.initialInvitation;
-        if (invitation != null) {
+        if (widget.initialSession != null) {
+          _session = widget.initialSession;
+          unawaited(_listen(_session!, _generation));
+        } else if (invitation != null) {
           unawaited(_join(invitation: invitation));
         } else {
           unawaited(_host());
@@ -74,9 +91,12 @@ class _ClipboardPairingPageState extends State<ClipboardPairingPage> {
         _error = null;
         _working = true;
         _approved = false;
+        _submittingCode = false;
+        _codeError = null;
+        _codeInput.clear();
       });
     }
-    await previous?.stop();
+    if (previous != null) await widget.controller.closePairing(previous);
     return generation;
   }
 
@@ -91,7 +111,7 @@ class _ClipboardPairingPageState extends State<ClipboardPairingPage> {
       unawaited(
         starting
             .then((session) {
-              if (abandoned || !mounted || generation != _generation) unawaited(session.stop());
+              if (abandoned || !mounted || generation != _generation) unawaited(widget.controller.closePairing(session));
             })
             .catchError((Object _) {}),
       );
@@ -188,6 +208,11 @@ class _ClipboardPairingPageState extends State<ClipboardPairingPage> {
             _update = update;
             _working = false;
             if (update.phase != 'waiting') _qr = null;
+            if (update.phase == 'enter_code' || update.phase == 'code_incorrect') {
+              _submittingCode = false;
+              _codeInput.clear();
+              _codeError = update.phase == 'code_incorrect' ? t.clipboardSync.incorrectCode : null;
+            }
           });
         }
         if (update.phase == 'authorized') {
@@ -199,13 +224,17 @@ class _ClipboardPairingPageState extends State<ClipboardPairingPage> {
           await widget.controller.savePairing(update, pending: false);
           complete = true;
           if (mounted && generation == _generation) {
-            setState(() {
-              _update = update;
-            });
+            if (widget.returnOnPaired) {
+              Navigator.pop(context, true);
+            } else {
+              setState(() {
+                _update = update;
+              });
+            }
           }
           await session.stop();
           return;
-        } else if (update.phase == 'failed' || update.phase == 'expired') {
+        } else if (update.phase == 'failed' || update.phase == 'expired' || update.phase == 'cancelled') {
           setState(() {
             _error = update.phase == 'expired' ? t.clipboardSync.pairingExpired : t.clipboardSync.pairingFailed;
           });
@@ -243,12 +272,39 @@ class _ClipboardPairingPageState extends State<ClipboardPairingPage> {
     }
   }
 
+  Future<void> _submitCode() async {
+    final session = _session;
+    if (session == null || _submittingCode) return;
+    final code = _codeInput.text;
+    if (!RegExp(r'^\d{8}$').hasMatch(code)) {
+      setState(() => _codeError = t.clipboardSync.codeLengthError);
+      return;
+    }
+    setState(() {
+      _submittingCode = true;
+      _codeError = null;
+    });
+    try {
+      await session.submitCode(code: code);
+      _codeInput.clear();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _submittingCode = false;
+          _codeError = t.clipboardSync.pairingFailed;
+        });
+      }
+    }
+  }
+
   @override
   void dispose() {
+    widget.controller.pairingScreenClosed();
     _generation++;
     _timer?.cancel();
     final session = _session;
-    if (session != null) unawaited(session.stop());
+    if (session != null) unawaited(widget.controller.closePairing(session));
+    _codeInput.dispose();
     super.dispose();
   }
 
@@ -285,35 +341,68 @@ class _ClipboardPairingPageState extends State<ClipboardPairingPage> {
                 Text(t.clipboardSync.pairedInstructions, textAlign: TextAlign.center),
                 const SizedBox(height: 24),
                 FilledButton(onPressed: () => Navigator.pop(context), child: Text(t.general.done)),
-              ] else if (phase == 'verify' || phase == 'authorized') ...[
-                Text(t.clipboardSync.verifyCode, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
+              ] else if (phase == 'request') ...[
+                const Icon(Icons.devices_rounded, size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  t.clipboardSync.pairingRequest(device: _update!.name),
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Text(t.clipboardSync.requestDescription, textAlign: TextAlign.center),
+                const SizedBox(height: 24),
+                FilledButton(onPressed: _approved ? null : _approve, child: Text(t.clipboardSync.acceptRequest)),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(t.clipboardSync.declineRequest)),
+              ] else if (phase == 'display_code') ...[
+                Text(t.clipboardSync.displayCodeTitle, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
                 const SizedBox(height: 16),
                 Text(_update!.name, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
                 const SizedBox(height: 24),
                 Text(
-                  _update!.code,
+                  _update!.code.replaceFirstMapped(RegExp(r'^(\d{4})(\d{4})$'), (match) => '${match[1]} ${match[2]}'),
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(fontFamily: 'monospace'),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-                Text(t.clipboardSync.verifyInstructions, textAlign: TextAlign.center),
+                Text(t.clipboardSync.displayCodeInstructions, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                Text(t.clipboardSync.codeExpiry, textAlign: TextAlign.center),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(t.general.cancel)),
+              ] else if (phase == 'enter_code' || phase == 'code_incorrect') ...[
+                Text(t.clipboardSync.enterCodeTitle, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                Text(_update!.name, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                Text(t.clipboardSync.enterCodeInstructions, textAlign: TextAlign.center),
                 const SizedBox(height: 24),
-                if (_approved || phase == 'authorized') ...[
-                  const Center(child: CircularProgressIndicator()),
-                  const SizedBox(height: 16),
-                  Text(phase == 'authorized' ? t.clipboardSync.pairingSaving : t.clipboardSync.waitingApproval, textAlign: TextAlign.center),
-                ] else
-                  FilledButton(onPressed: _approve, child: Text(t.clipboardSync.codesMatch)),
-                TextButton(onPressed: () => Navigator.pop(context), child: Text(t.clipboardSync.reject)),
+                PairingCodeInput(
+                  controller: _codeInput,
+                  enabled: !_submittingCode,
+                  label: t.clipboardSync.pairingCodeLabel,
+                  errorText: _codeError,
+                  onSubmitted: _submitCode,
+                ),
+                const SizedBox(height: 16),
+                FilledButton(onPressed: _submittingCode ? null : _submitCode, child: Text(t.clipboardSync.confirmCode)),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(t.general.cancel)),
+              ] else if (phase == 'requesting' || phase == 'verifying_code' || phase == 'authorized') ...[
+                const Center(child: CircularProgressIndicator()),
+                const SizedBox(height: 16),
+                Text(
+                  phase == 'authorized'
+                      ? t.clipboardSync.pairingSaving
+                      : phase == 'requesting'
+                      ? t.clipboardSync.waitingForAcceptance
+                      : t.clipboardSync.verifyingCode,
+                  textAlign: TextAlign.center,
+                ),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(t.general.cancel)),
               ] else if (_working) ...[
                 const Center(child: CircularProgressIndicator()),
                 const SizedBox(height: 16),
                 Text(t.clipboardSync.pairingWorking, textAlign: TextAlign.center),
               ] else ...[
-                if (Platform.isAndroid) ...[
-                  FilledButton.icon(onPressed: _scan, icon: const Icon(Icons.qr_code_scanner), label: Text(t.clipboardSync.scanQr)),
-                  const SizedBox(height: 24),
-                ],
                 Text(t.clipboardSync.qrInstructions, textAlign: TextAlign.center),
                 const SizedBox(height: 20),
                 if (_qr != null && seconds > 0)
@@ -334,6 +423,10 @@ class _ClipboardPairingPageState extends State<ClipboardPairingPage> {
                   ),
                 const SizedBox(height: 12),
                 Text(t.clipboardSync.expires(seconds: seconds), textAlign: TextAlign.center),
+                if (Platform.isAndroid) ...[
+                  const SizedBox(height: 24),
+                  FilledButton.icon(onPressed: _scan, icon: const Icon(Icons.qr_code_scanner), label: Text(t.clipboardSync.scanQr)),
+                ],
                 const SizedBox(height: 24),
                 Text(t.clipboardSync.nearbyInstructions),
                 const SizedBox(height: 12),

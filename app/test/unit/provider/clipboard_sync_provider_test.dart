@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localsend_app/provider/clipboard_sync_provider.dart';
+import 'package:localsend_isolates/rust/api/clipboard.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
 void main() {
@@ -108,6 +109,111 @@ void main() {
     expect(container.read(clipboardSyncProvider).running, false);
     expect(container.read(clipboardSyncProvider).peers.single.pending, true);
     expect(calls, ['loadSecret']);
+  }, skip: !Platform.isWindows);
+
+  test('mutual pairing completion enables and persists clipboard and image sharing on both endpoints', () async {
+    final identities = ['A' * 64, 'B' * 64];
+    final secrets = {
+      for (final identity in identities)
+        identity: jsonEncode({
+          'version': 1,
+          'certificate': 'certificate-fixture',
+          'privateKey': 'secret-private-key',
+          'fingerprint': identity,
+          'enabled': false,
+          'syncImages': false,
+          'peers': [],
+        }),
+    };
+    var loading = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      if (call.method == 'loadSecret') return secrets[identities[loading++]];
+      if (call.method == 'stop') return null;
+      if (call.method == 'saveSecret') {
+        final value = (call.arguments as Map)['value'] as String;
+        secrets[(jsonDecode(value) as Map)['fingerprint'] as String] = value;
+        return null;
+      }
+      if (call.method == 'authorize' || call.method == 'status') return {'authorized': false};
+      fail('Unexpected native operation: ${call.method}');
+    });
+    final endpoints = [RefenaContainer(), RefenaContainer()];
+    addTearDown(() {
+      for (final endpoint in endpoints) {
+        endpoint.disposeContainer();
+      }
+    });
+    for (final endpoint in endpoints) {
+      await endpoint.notifier(clipboardSyncProvider).initialize();
+    }
+    final updates = [
+      for (var index = 0; index < 2; index++)
+        RsPairingUpdate(
+          revision: BigInt.one,
+          phase: 'authorized',
+          code: '',
+          fingerprint: identities[1 - index],
+          address: '192.0.2.${index + 1}:53318',
+          name: 'Other device',
+          expires: BigInt.zero,
+        ),
+    ];
+    for (var index = 0; index < 2; index++) {
+      await endpoints[index].notifier(clipboardSyncProvider).savePairing(updates[index], pending: true);
+      expect(endpoints[index].read(clipboardSyncProvider).enabled, false);
+      expect(endpoints[index].read(clipboardSyncProvider).syncImages, false);
+    }
+    expect(calls, isNot(contains('authorize')));
+    for (var index = 0; index < 2; index++) {
+      await endpoints[index].notifier(clipboardSyncProvider).savePairing(updates[index], pending: false);
+      final state = endpoints[index].read(clipboardSyncProvider);
+      expect(state.enabled, true);
+      expect(state.syncImages, true);
+      expect(state.peers.single.pending, false);
+      // Missing OS authorization must never be bypassed by automatic activation.
+      expect(state.running, false);
+      final persisted = jsonDecode(secrets[identities[index]]!) as Map;
+      expect(persisted['enabled'], true);
+      expect(persisted['syncImages'], true);
+      expect(persisted['hasEnabledBefore'], true);
+    }
+    expect(calls.where((call) => call == 'authorize'), hasLength(2));
+    expect(calls, isNot(contains('start')));
+  }, skip: !Platform.isWindows);
+
+  test('a final pairing storage failure cannot enable sharing or discard the pending trust guard', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      if (call.method == 'loadSecret') return stored;
+      if (call.method == 'stop') return null;
+      if (call.method == 'saveSecret') {
+        final value = (call.arguments as Map)['value'] as String;
+        final json = jsonDecode(value) as Map;
+        if (json['enabled'] == true) throw PlatformException(code: 'STORE_UNAVAILABLE');
+        stored = value;
+        return null;
+      }
+      fail('Unexpected native operation: ${call.method}');
+    });
+    final controller = container.notifier(clipboardSyncProvider);
+    await controller.initialize();
+    final update = RsPairingUpdate(
+      revision: BigInt.one,
+      phase: 'authorized',
+      code: '',
+      fingerprint: 'B' * 64,
+      address: '192.0.2.2:53318',
+      name: 'Other device',
+      expires: BigInt.zero,
+    );
+    await controller.savePairing(update, pending: true);
+    await expectLater(controller.savePairing(update, pending: false), throwsA(isA<PlatformException>()));
+    final state = container.read(clipboardSyncProvider);
+    expect(state.enabled, false);
+    expect(state.syncImages, false);
+    expect(state.peers.single.pending, true);
+    expect(calls, isNot(contains('authorize')));
   }, skip: !Platform.isWindows);
 
   test('missing native authorization does not start capture or transport', () async {

@@ -11,9 +11,9 @@ Linux and macOS clipboard implementation and testing are deferred indefinitely.
   or Android Keystore AES-GCM. Android ciphertext is an atomic file in
   `noBackupFilesDir`. Lost/corrupt secure storage fails closed and is not silently
   replaced. Ordinary LocalSend certificates/settings are not clipboard trust.
-- Reciprocal QR or nearby pairing through a temporary TLS 1.3 enrollment
-  channel, with an eight-digit TLS-exporter comparison and approval on both
-  devices. QR pins the host certificate and carries a one-use random invitation.
+- QR or nearby pairing through a TLS 1.3 enrollment channel, with explicit
+  receiver approval and an eight-digit secret displayed only on that device.
+  The requester enters it; SPAKE2 and TLS-bound key confirmation verify possession. QR pins the host certificate and carries a one-use random invitation.
   Manual fingerprint exchange remains an advanced fallback. Favorites grant no access.
 - TLS 1.3 only, exact client/server certificate pins, handshake signature
   verification, clipboard-specific ALPN, no tickets, resumption or early data.
@@ -75,11 +75,14 @@ Its Activity is `org.localsend.localsend_app.MainActivity`.
    menu > Android permissions; authorize the new LocalSend package and notifications.
    If setup needs attention, the page also offers Set up access.
 3. Open Add device on Windows. On Android open Add device, choose Scan QR code,
-   allow the camera when prompted, and scan the Windows QR. Compare the eight-digit
-   code on both screens and approve on both. Both should show Device paired.
-   Alternatively, open Add device on both and select the other nearby device.
+   allow the camera when prompted, and scan the Windows QR. Accept the request
+   on Windows, then enter its eight-digit code on Android. Both should show
+   Device paired. Alternatively, select Windows from Nearby devices on Android;
+   Windows receives the request anywhere in the running app.
    Manual public-code exchange is available under More > Manual pairing.
-4. Turn on Share clipboard on both devices. Confirm one connected peer on each.
+4. Successful pairing turns on Share clipboard and Synchronize copied images
+   on both devices. Allow any requested Android permissions, then confirm one
+   connected peer on each.
 5. Copy a harmless distinctive marker on Android in another app. Paste on
    Windows; then use a different marker on Windows and paste on Android.
 6. Repeat with Windows hidden to tray and Android task dismissed. Copying an
@@ -125,12 +128,16 @@ there is no automatic quality reduction, file sync, or clipboard history.
   no clipboard-capability discovery extension or certificate rotation UI yet.
   Nearby pairing uses existing LocalSend discovery as a candidate list; it does
   not grant trust, prove clipboard support, or automatically refresh saved addresses.
-- Enrollment listens on TCP 53319 only while Add device is open, for three
-  minutes. Up to four initial handshakes and 24 attempts are allowed per session;
-  one valid request claims it. Approval and protected-storage acknowledgements
-  are required from both endpoints. Pending trust is never passed to the text
+- Enrollment listens on TCP 53319 while LocalSend is running. Invitations and
+  their sessions expire after three minutes and the listener rotates. Up to four
+  initial handshakes and 24 attempts are allowed per listener; one valid request
+  claims it. Receiver approval and the correct code are required. Three wrong
+  codes terminate the session, and listener restarts after requests have a
+  30-second cooldown. Protected-storage acknowledgements are required from both endpoints. Pending trust is never passed to the text
   runtime. Interrupted pairing must be removed/retried, rather than auto-approved.
-  Names are display hints; compare the code even if the name looks familiar.
+  Names are display hints; enter the code from the intended device even if the
+  name looks familiar. Incoming requests are declined while another pairing
+  flow is open.
 - QR decoding uses bundled offline Apache-licensed ZXing, without Google Play
   Services. Camera access is only requested when scanning and released by the
   private portrait scanner Activity when it closes. Windows displays QR codes;
@@ -138,16 +145,21 @@ there is no automatic quality reduction, file sync, or clipboard history.
 - QR codes now contain an HTTPS link on `localsend.currenta.tech`, with credentials
   in the URL fragment. Android's verified App Link opens the pairing route on
   cold/warm VIEW intents; the fallback website offers a custom-scheme Open app
-  button. Both devices still approve before trust is committed. The association
+  button. QR pairing also requires receiver approval and code entry before
+  trust is committed. The association
   file now covers the debug signer and permanent fork release signer. Release
   camera-link behavior still needs testing with the signed release APK.
   See `app_link_site/README.md` for deployment and release-signing requirements.
 - The page shows saved devices as individual cards, with a green dot for each
-  live connection. Pairing alone does not turn on clipboard sharing, so no dots
-  while synchronization is disabled is expected.
-- The enrollment protocol uses the RFC 9266 TLS-exporter channel binding, with
-  its result reduced to an eight-digit comparison. This use is covered by local
-  tests but has not received independent protocol review. QR invitations are
+  live connection. Completing pairing enables clipboard and copied-image sharing
+  on both endpoints. Missing OS permissions remain visible as setup guidance.
+  Incomplete or cancelled pairing never enables sharing.
+- The enrollment protocol uses SPAKE2 (Ed25519 group) with role-separated HMAC
+  key confirmation and the RFC 9266 TLS-exporter channel binding. The random
+  eight-digit code is not transmitted or stored in application state/settings.
+  This composition is covered by local tests but has not received independent
+  protocol review. Pairing ALPN `/2` rejects the previous comparison protocol;
+  both devices must use an updated build. QR invitations are
   temporary bearer credentials; do not publish screenshots of an active invitation.
 - Clearing, multiple items, rich text, unsupported images and sensitive-marked
   clips are skipped, and clear retained content. Supported images require opt-in.

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,37 +13,19 @@ import 'package:localsend_isolates/isolate.dart';
 import 'package:localsend_isolates/rust/api/clipboard.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
+import '../fakes/pairing_session.dart';
 import '../mocks.mocks.dart';
 
 class _Isolates extends Fake implements IsolateController {}
-
-class _Session extends Fake implements RsClipboardPairing {
-  final updates = Completer<RsPairingUpdate?>();
-  int stops = 0;
-  @override
-  Future<String?> invitation() async => jsonEncode({
-    'version': 2,
-    'kind': 'localsend-clipboard-pair',
-    'fingerprint': 'A' * 64,
-    'port': 53319,
-    'addresses': ['192.0.2.1'],
-    'token': 'B' * 64,
-    'expires': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 180,
-  });
-  @override
-  Future<RsPairingUpdate?> nextUpdate({required BigInt after}) => updates.future;
-  @override
-  Future<void> stop() async {
-    stops++;
-    if (!updates.isCompleted) updates.complete(null);
-  }
-}
 
 class _Controller extends ClipboardSyncController {
   final Future<RsClipboardPairing> result;
   _Controller(this.result);
   @override
   Future<RsClipboardPairing> hostPairing({required String name}) => result;
+  final saves = <bool>[];
+  @override
+  Future<void> savePairing(RsPairingUpdate update, {required bool pending}) async => saves.add(pending);
 }
 
 void main() {
@@ -72,7 +53,7 @@ void main() {
   }
 
   testWidgets('opening Add device reaches the QR screen without an inherited-widget lifecycle exception', (tester) async {
-    final session = _Session();
+    final session = PairingSessionFake();
     await mount(tester, _Controller(Future.value(session)));
     expect(tester.takeException(), isNull);
     expect(find.text(t.clipboardSync.qrInstructions), findsOneWidget);
@@ -90,11 +71,68 @@ void main() {
     expect(find.text(t.clipboardSync.pairingFailed), findsOneWidget);
     expect(find.text(t.clipboardSync.tryAgain), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
-    final session = _Session();
+    final session = PairingSessionFake();
     starting.complete(session);
     await tester.pump();
     expect(session.stops, 1);
     await tester.pumpWidget(const SizedBox());
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('receiver must accept before a code is displayed and code alone does not save trust', (tester) async {
+    final session = PairingSessionFake();
+    final controller = _Controller(Future.value(session));
+    await mount(tester, controller);
+    session.emit('request');
+    await tester.pumpAndSettle();
+    expect(find.text(t.clipboardSync.pairingRequest(device: 'Other device')), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(session.approvals, isEmpty);
+    await tester.tap(find.text(t.clipboardSync.acceptRequest));
+    await tester.pump();
+    expect(session.approvals, [true]);
+    session.emit('display_code', code: '01234567');
+    await tester.pumpAndSettle();
+    expect(find.text('0123 4567'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(controller.saves, isEmpty);
+    await tester.tap(find.text(t.general.cancel));
+    await tester.pumpAndSettle();
+    expect(controller.saves, isEmpty);
+  });
+
+  testWidgets('requester types eight digits, retries an incorrect code, and only saves after authentication', (tester) async {
+    final session = PairingSessionFake();
+    final controller = _Controller(Future.value(session));
+    await mount(tester, controller);
+    session.emit('enter_code');
+    await tester.pumpAndSettle();
+    expect(find.text(t.clipboardSync.displayCodeTitle), findsNothing);
+    await tester.enterText(find.byType(TextField), '123');
+    await tester.tap(find.text(t.clipboardSync.confirmCode));
+    await tester.pump();
+    expect(find.text(t.clipboardSync.codeLengthError), findsOneWidget);
+    expect(session.codes, isEmpty);
+    await tester.enterText(find.byType(TextField), '01234567');
+    await tester.tap(find.text(t.clipboardSync.confirmCode));
+    await tester.pump();
+    expect(session.codes, ['01234567']);
+    expect(controller.saves, isEmpty);
+    session.emit('code_incorrect');
+    await tester.pumpAndSettle();
+    expect(find.text(t.clipboardSync.incorrectCode), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, isEmpty);
+    await tester.enterText(find.byType(TextField), '76543210');
+    await tester.tap(find.text(t.clipboardSync.confirmCode));
+    await tester.pump();
+    session.emit('authorized');
+    await tester.pump();
+    expect(controller.saves, [true]);
+    expect(session.persistedValues, [true]);
+    session.emit('complete');
+    await tester.pumpAndSettle();
+    expect(controller.saves, [true, false]);
+    expect(find.text(t.clipboardSync.paired), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 }

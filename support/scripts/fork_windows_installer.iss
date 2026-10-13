@@ -11,10 +11,11 @@
 
 [Setup]
 AppId={{489FD5C5-19BE-4F73-9566-B47924A0A5BA}
-AppName=LocalSend AutoSync
+AppName=LocalSend
 AppVersion={#MyAppVersion}
 DefaultDirName={localappdata}\Programs\LocalSend AutoSync
-DefaultGroupName=LocalSend AutoSync
+; Preserve the installation path and AppId so existing fork installations upgrade in place.
+DefaultGroupName=LocalSend
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -32,7 +33,10 @@ RestartApplications=no
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "*.pdb,*.msix,*.manifest,install_msix_helper.ps1,logo.ico"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\LocalSend AutoSync"; Filename: "{app}\localsend_app.exe"
+Name: "{autoprograms}\LocalSend"; Filename: "{app}\localsend_app.exe"
+
+[InstallDelete]
+Type: files; Name: "{autoprograms}\LocalSend AutoSync.lnk"
 
 [Run]
-Filename: "{app}\localsend_app.exe"; Description: "Launch LocalSend AutoSync"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\localsend_app.exe"; Description: "Launch LocalSend"; Flags: nowait postinstall skipifsilent

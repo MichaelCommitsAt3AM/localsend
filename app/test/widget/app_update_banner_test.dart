@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/model/update/app_release.dart';
@@ -12,6 +13,8 @@ class _TestUpdateNotifier extends AppUpdateNotifier {
 
   @override
   AppUpdateState init() => initialState;
+
+  void hideBanner() => state = const AppUpdateState(stage: UpdateStage.idle);
 }
 
 void main() {
@@ -31,6 +34,51 @@ void main() {
     publishedAt: null,
     assets: [dummyAsset],
   );
+
+  for (final visible in [false, true]) {
+    testWidgets('phone safe areas are applied once with banner visible=$visible, including after dismissal', (tester) async {
+      tester.view.padding = const FakeViewPadding(top: 24, bottom: 16);
+      tester.view.viewPadding = const FakeViewPadding(top: 24, bottom: 16);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPadding);
+      addTearDown(tester.view.resetViewPadding);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final notifier = _TestUpdateNotifier(
+        visible ? AppUpdateState(stage: UpdateStage.available, release: dummyRelease) : const AppUpdateState(stage: UpdateStage.idle),
+      );
+      await tester.pumpWidget(
+        RefenaScope(
+          overrides: [appUpdateProvider.overrideWithNotifier((_) => notifier)],
+          child: TranslationProvider(
+            child: MaterialApp(
+              builder: (context, child) => AppUpdateBannerWatcher(child: child!),
+              home: Scaffold(
+                appBar: AppBar(title: const Text('Page title')),
+                body: const SafeArea(child: SizedBox.expand(key: ValueKey('body'))),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final scaffoldTop = tester.getTopLeft(find.byType(Scaffold)).dy;
+      expect(scaffoldTop, visible ? greaterThan(24) : 0);
+      expect(tester.getSize(find.byType(AppBar)).height, kToolbarHeight + (visible ? 0 : 24));
+      expect(tester.getBottomRight(find.byKey(const ValueKey('body'))).dy, tester.view.physicalSize.height - 16);
+      if (visible) {
+        final region = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+          find.ancestor(of: find.byIcon(Icons.system_update_rounded), matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>)).first,
+        );
+        expect(region.value.statusBarColor, Colors.transparent);
+        expect(region.value.systemStatusBarContrastEnforced, false);
+        notifier.hideBanner();
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(find.byType(Scaffold)).dy, 0);
+        expect(tester.getSize(find.byType(AppBar)).height, kToolbarHeight + 24);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('does not show banner when update stage is idle', (tester) async {
     await tester.pumpWidget(

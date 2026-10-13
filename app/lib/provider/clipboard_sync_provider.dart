@@ -86,6 +86,9 @@ class ClipboardSyncState {
 }
 
 class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
+  final Future<RsClipboardPairing> Function(String name)? _pairingReceiverFactory;
+  ClipboardSyncController({Future<RsClipboardPairing> Function(String name)? createPairingReceiver})
+    : _pairingReceiverFactory = createPairingReceiver;
   static const _methods = MethodChannel('org.localsend.localsend_app/clipboard');
   static const _events = EventChannel('org.localsend.localsend_app/clipboard_events');
   String? _certificate;
@@ -109,9 +112,33 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   String? _notificationMetadata;
   String? _captureIssue;
   String? _screenshotIssue;
+  final _pairingRequests = StreamController<RsClipboardPairing>.broadcast();
+  Stream<RsClipboardPairing> get pairingRequests => _pairingRequests.stream;
+  RsClipboardPairing? _receiver;
+  Future<RsClipboardPairing>? _receiverStarting;
+  Timer? _receiverRetry;
+  bool _receiverAttached = false;
+  bool _acceptPairingRequests = false;
+  bool _pairingDisposed = false;
+  String _pairingDeviceName = 'LocalSend';
+  DateTime? _pairingRetryAfter;
+  int _pairingScreens = 0;
+  void pairingScreenOpened() => _pairingScreens++;
+  void pairingScreenClosed() => _pairingScreens--;
 
   @override
   ClipboardSyncState init() => const ClipboardSyncState();
+
+  @override
+  void dispose() {
+    _pairingDisposed = true;
+    _acceptPairingRequests = false;
+    _receiverRetry?.cancel();
+    final receiver = _receiver;
+    if (receiver != null) unawaited(receiver.stop());
+    unawaited(_pairingRequests.close());
+    super.dispose();
+  }
 
   void _publish(String status) {
     state = ClipboardSyncState(
@@ -297,16 +324,115 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   }
 
   Future<RsClipboardPairing> hostPairing({required String name}) async {
+    _pairingDeviceName = name;
+    if (_receiverAttached) throw StateError('A pairing screen is already open');
+    _receiverAttached = true;
+    try {
+      return await _ensurePairingReceiver();
+    } catch (_) {
+      _receiverAttached = false;
+      rethrow;
+    }
+  }
+
+  /// The invitation listener can receive an approval request anywhere in the
+  /// running app. The secret and code exchange stay in Rust and the route.
+  Future<void> startPairingRequests({required String name}) async {
+    _acceptPairingRequests = true;
+    _pairingDeviceName = name;
+    try {
+      await _ensurePairingReceiver();
+    } catch (_) {
+      _schedulePairingReceiver();
+    }
+  }
+
+  void _schedulePairingReceiver() {
+    if (_pairingDisposed || !_acceptPairingRequests) return;
+    _receiverRetry?.cancel();
+    final cooldown = _pairingRetryAfter?.difference(DateTime.now()) ?? Duration.zero;
+    _receiverRetry = Timer(cooldown > const Duration(seconds: 2) ? cooldown : const Duration(seconds: 2), () {
+      unawaited(startPairingRequests(name: _pairingDeviceName));
+    });
+  }
+
+  Future<RsClipboardPairing> _ensurePairingReceiver() async {
+    if (_pairingDisposed) throw StateError('Pairing unavailable');
+    if (_receiver != null) return _receiver!;
+    if (_receiverStarting != null) return _receiverStarting!;
+    if (_pairingRetryAfter?.isAfter(DateTime.now()) == true) throw StateError('Pairing request cooldown');
+    final starting = _pairingReceiverFactory?.call(_pairingDeviceName) ?? _createPairingReceiver();
+    _receiverStarting = starting;
+    try {
+      final receiver = await starting;
+      if (_pairingDisposed) {
+        await receiver.stop();
+        throw StateError('Pairing unavailable');
+      }
+      _receiver = receiver;
+      unawaited(_monitorPairingReceiver(receiver));
+      return receiver;
+    } finally {
+      _receiverStarting = null;
+    }
+  }
+
+  Future<RsClipboardPairing> _createPairingReceiver() async {
     if (_certificate == null) throw StateError('Clipboard identity unavailable');
-    final addresses = (jsonDecode(_pairingCode) as Map<String, dynamic>)['addresses'] as List;
+    final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4, includeLoopback: false);
+    final addresses = interfaces.expand((i) => i.addresses).map((a) => a.address).where((a) => !a.startsWith('169.254.')).toSet().toList();
     return hostClipboardPairing(
       certificate: _certificate!,
       privateKey: _privateKey!,
       port: 53319,
-      addresses: addresses.cast<String>(),
-      name: _pairingName(name).isEmpty ? 'LocalSend' : _pairingName(name),
+      addresses: addresses,
+      name: _pairingName(_pairingDeviceName).isEmpty ? 'LocalSend' : _pairingName(_pairingDeviceName),
       clipboardPort: clipboardSyncPort,
     );
+  }
+
+  Future<void> _monitorPairingReceiver(RsClipboardPairing receiver) async {
+    var revision = BigInt.zero;
+    var requested = false;
+    try {
+      while (!_pairingDisposed && identical(receiver, _receiver)) {
+        final update = await receiver.nextUpdate(after: revision);
+        if (update == null) break;
+        revision = update.revision;
+        if (update.phase == 'request') {
+          requested = true;
+          _pairingRetryAfter = DateTime.now().add(const Duration(seconds: 30));
+          if (!_receiverAttached) {
+            _receiverAttached = true;
+            if (_pairingRequests.hasListener && _pairingScreens == 0) {
+              _pairingRequests.add(receiver);
+            } else {
+              await receiver.approve(approved: false);
+            }
+          }
+        }
+        if (['complete', 'failed', 'expired', 'cancelled'].contains(update.phase)) break;
+      }
+    } catch (_) {
+      // Never log invitation tokens or pairing codes.
+    } finally {
+      await receiver.stop();
+      if (identical(receiver, _receiver)) {
+        _receiver = null;
+        _receiverAttached = false;
+      }
+      // Bound repeated requests across listener restarts, including declines.
+      if (requested) _pairingRetryAfter = DateTime.now().add(const Duration(seconds: 30));
+      _schedulePairingReceiver();
+    }
+  }
+
+  Future<void> closePairing(RsClipboardPairing session) async {
+    if (identical(session, _receiver)) {
+      _receiver = null;
+      _receiverAttached = false;
+    }
+    await session.stop();
   }
 
   Future<RsClipboardPairing> joinPairing({String? invitation, String? address, required String name}) async {
@@ -329,19 +455,38 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
     }
     final existing = _peers.where((p) => p.fingerprint != update.fingerprint).toList();
     if (existing.length >= 8) throw StateError('Clipboard peer limit reached');
+    final previousPeers = _peers;
+    final previousSyncImages = _syncImages;
+    final previousEnabledBefore = _hasEnabledBefore;
     _busy = true;
     try {
       await _stop();
       _peers = [...existing, ClipboardPeer(fingerprint: update.fingerprint, address: update.address, name: update.name, pending: pending)];
+      if (!pending) {
+        _enabled = true;
+        _syncImages = true;
+        _hasEnabledBefore = true;
+      }
       await _save();
-      if (_enabled && !pending) await _start();
       _publish(pending ? 'Finishing pairing' : 'Device paired');
     } catch (_) {
+      _peers = previousPeers;
+      _syncImages = previousSyncImages;
+      _hasEnabledBefore = previousEnabledBefore;
       _enabled = false;
       _publish('Pairing could not be saved; synchronization is disabled');
       rethrow;
     } finally {
       _busy = false;
+    }
+    if (!pending && !_pairingDisposed) {
+      // Both routes execute this only after mutual authentication and storage.
+      // Keep the saved preferences on if OS access still needs user approval.
+      try {
+        await authorize();
+      } catch (_) {
+        _publish('Device paired; authorize clipboard access to start sharing');
+      }
     }
   }
 

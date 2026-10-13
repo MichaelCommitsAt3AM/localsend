@@ -131,17 +131,19 @@ jobs:
             encoded = value.encode('utf-16-be')
             return ''.join('\\u%04x' % int.from_bytes(encoded[i:i+2], 'big') for i in range(0, len(encoded), 2))
           Path('app/android/key.properties').write_text('storeFile=fork-release.jks\nstorePassword=' + prop(os.environ['STORE_PASSWORD']) + '\nkeyPassword=' + prop(os.environ['KEY_PASSWORD']) + '\nkeyAlias=' + prop(os.environ['KEY_ALIAS']) + '\n')
-      - name: Build universal APK
+      - name: Build architecture-specific APKs
         working-directory: app
         run: |
           flutter pub get
-          flutter build apk --release
+          flutter build apk --release --split-per-abi
       - name: Stage artifact
         env:
           VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           mkdir -p fork-dist
-          cp app/build/app/outputs/flutter-apk/app-release.apk "fork-dist/LocalSend-$VERSION-android-universal.apk"
+          for abi in armeabi-v7a arm64-v8a x86_64; do
+            cp "app/build/app/outputs/flutter-apk/app-$abi-release.apk" "fork-dist/LocalSend-$VERSION-android-$abi.apk"
+          done
       - uses: actions/upload-artifact@v6
         with:
           name: fork-android
@@ -176,7 +178,7 @@ jobs:
               notes_file="$RUNNER_TEMP/release-notes.md"
               printf '%s\n' 'Development fork. Review platform testing and signing before publishing.' > "$notes_file"
             fi
-            gh release create "$TAG" --repo "$REPOSITORY" --draft --title "LocalSend AutoSync $TAG" --notes-file "$notes_file" --target "$GITHUB_SHA"
+            gh release create "$TAG" --repo "$REPOSITORY" --draft --title "LocalSend $TAG" --notes-file "$notes_file" --target "$GITHUB_SHA"
           fi
           gh release upload "$TAG" fork-dist/* --repo "$REPOSITORY" --clobber
           # Require GitHub's SHA-256 metadata before the draft can be considered ready.
