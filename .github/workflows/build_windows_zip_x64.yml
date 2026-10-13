@@ -90,9 +90,7 @@ jobs:
       - name: Add DLL files
         working-directory: app
         run: |
-          Copy-Item ../support/build/windows/x64/msvcp140.dll build/windows/x64/runner/Release/
-          Copy-Item ../support/build/windows/x64/vcruntime140.dll build/windows/x64/runner/Release/
-          Copy-Item ../support/build/windows/x64/vcruntime140_1.dll build/windows/x64/runner/Release/
+          & ../support/scripts/copy_windows_runtime.ps1 -Destination build/windows/x64/runner/Release -Architecture x64
 
       # The MSIX helper only makes sense for the installer; portable users should not register an MSIX package
       - name: Remove MSIX helper from portable bundle

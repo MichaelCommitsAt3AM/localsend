@@ -8,6 +8,14 @@
 #ifndef ResultDir
   #error ResultDir is required
 #endif
+#ifndef TargetArchitecture
+  #define TargetArchitecture "x64"
+#endif
+#if TargetArchitecture == "arm64"
+  #define ArchitectureName "arm64"
+#else
+  #define ArchitectureName "x86-64"
+#endif
 
 [Setup]
 AppId={{489FD5C5-19BE-4F73-9566-B47924A0A5BA}
@@ -17,10 +25,15 @@ DefaultDirName={localappdata}\Programs\LocalSend AutoSync
 ; Preserve the installation path and AppId so existing fork installations upgrade in place.
 DefaultGroupName=LocalSend
 PrivilegesRequired=lowest
+#if TargetArchitecture == "arm64"
+ArchitecturesAllowed=arm64
+ArchitecturesInstallIn64BitMode=arm64
+#else
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+#endif
 OutputDir={#ResultDir}
-OutputBaseFilename=LocalSend-{#MyAppVersion}-windows-x86-64
+OutputBaseFilename=LocalSend-{#MyAppVersion}-windows-{#ArchitectureName}
 SetupIconFile={#PayloadDir}\logo.ico
 UninstallDisplayIcon={app}\localsend_app.exe
 Compression=lzma2

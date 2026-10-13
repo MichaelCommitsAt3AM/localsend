@@ -4,6 +4,11 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      build_only:
+        description: Build artifacts without creating or modifying a release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -43,16 +48,56 @@ jobs:
 
   windows:
     needs: metadata
-    runs-on: windows-latest
-    env:
-      CARGO_BUILD_JOBS: '2'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x64
+            runner: windows-latest
+          - architecture: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
+        if: matrix.architecture == 'x64'
         with:
           flutter-version: ${{ needs.metadata.outputs.flutter }}
           cache: true
-      - uses: dtolnay/rust-toolchain@stable
+      # Match the existing ARM64 packaging workflow: native Windows Dart starts at 3.47.
+      - name: Cache native ARM64 Flutter SDK and pub packages
+        if: matrix.architecture == 'arm64'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ runner.temp }}/flutter-arm64
+            ~/AppData/Local/Pub/Cache
+          key: windows-arm64-flutter-3.47.4-${{ hashFiles('pubspec.lock') }}
+          restore-keys: windows-arm64-flutter-3.47.4-
+      - name: Set up native ARM64 Flutter
+        if: matrix.architecture == 'arm64'
+        shell: pwsh
+        run: |
+          $sdk = Join-Path $env:RUNNER_TEMP 'flutter-arm64'
+          if (-not (Test-Path -LiteralPath "$sdk/bin/flutter.bat")) {
+            git clone --depth 1 --branch 3.47.4 https://github.com/flutter/flutter.git $sdk
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          Add-Content $env:GITHUB_PATH "$sdk/bin"
+          & "$sdk/bin/flutter.bat" --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $dartVersion = & "$sdk/bin/dart.bat" --version 2>&1 | Out-String
+          if ($dartVersion -notmatch 'windows_arm64') { throw 'Flutter did not provide native ARM64 Dart' }
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.97.1'
+      - name: Cache Rust dependencies and Cargokit output
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-${{ matrix.architecture }}-${{ env.ImageVersion }}
+          workspaces: . -> app/build/windows/${{ matrix.architecture }}/plugins/rust_lib_localsend_app/cargokit_build
+          cache-workspace-crates: true
+          cache-on-failure: true
       - name: Install pinned Inno Setup 6
         shell: pwsh
         run: |
@@ -67,6 +112,10 @@ jobs:
       - name: Prepare build-time MSIX helper
         shell: pwsh
         run: |
+          if ('${{ matrix.architecture }}' -eq 'arm64') {
+            $manifest = 'support/build/msix/content/AppxManifest.xml'
+            (Get-Content $manifest) -replace 'ProcessorArchitecture="x64"', 'ProcessorArchitecture="arm64"' | Set-Content $manifest
+          }
           $makepri = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64\makepri.exe' | Select-Object -Last 1
           & $makepri.FullName new /pr support/build/msix/content /cf support/build/msix/priconfig.xml /mn support/build/msix/content/AppxManifest.xml /of support/build/msix/content/resources.pri /o
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -85,16 +134,16 @@ jobs:
           $payload = Join-Path $env:RUNNER_TEMP 'fork-installer-payload'
           $result = Join-Path $env:RUNNER_TEMP 'fork-installer-result'
           New-Item -ItemType Directory -Path $payload,$result -Force | Out-Null
-          Copy-Item -Path 'app/build/windows/x64/runner/Release/*' -Destination $payload -Recurse
-          Copy-Item -Path 'support/build/windows/x64/*' -Destination $payload
+          Copy-Item -Path 'app/build/windows/${{ matrix.architecture }}/runner/Release/*' -Destination $payload -Recurse
+          & ./support/scripts/copy_windows_runtime.ps1 -Destination $payload -Architecture '${{ matrix.architecture }}'
           Copy-Item -LiteralPath 'app/assets/packaging/logo.ico' -Destination $payload
           $compiler = Join-Path $env:RUNNER_TEMP 'inno-setup-6/ISCC.exe'
           if (-not (Test-Path -LiteralPath $compiler)) { throw 'Inno Setup 6 is required on the runner' }
-          & $compiler "/DMyAppVersion=$env:VERSION" "/DPayloadDir=$payload" "/DResultDir=$result" support/scripts/fork_windows_installer.iss
+          & $compiler "/DMyAppVersion=$env:VERSION" "/DPayloadDir=$payload" "/DResultDir=$result" '/DTargetArchitecture=${{ matrix.architecture }}' support/scripts/fork_windows_installer.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v6
         with:
-          name: fork-windows
+          name: fork-windows-${{ matrix.architecture }}
           path: ${{ runner.temp }}/fork-installer-result/*.exe
           if-no-files-found: error
 
@@ -102,18 +151,31 @@ jobs:
     needs: metadata
     runs-on: ubuntu-latest
     env:
-      CARGO_BUILD_JOBS: '2'
+      GRADLE_OPTS: -Dorg.gradle.caching=true
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
+      - name: Cache Gradle dependencies and build cache
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ needs.metadata.outputs.flutter }}
           cache: true
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: '1.97.1'
+      - name: Cache Rust dependencies and Cargokit output
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: android-arm64
+          workspaces: . -> app/build/rust_lib_localsend_app/build
+          cache-workspace-crates: true
+          cache-on-failure: true
       - name: Configure permanent Android release signing
         shell: python
         env:
@@ -131,19 +193,17 @@ jobs:
             encoded = value.encode('utf-16-be')
             return ''.join('\\u%04x' % int.from_bytes(encoded[i:i+2], 'big') for i in range(0, len(encoded), 2))
           Path('app/android/key.properties').write_text('storeFile=fork-release.jks\nstorePassword=' + prop(os.environ['STORE_PASSWORD']) + '\nkeyPassword=' + prop(os.environ['KEY_PASSWORD']) + '\nkeyAlias=' + prop(os.environ['KEY_ALIAS']) + '\n')
-      - name: Build architecture-specific APKs
+      - name: Build ARM64 APK
         working-directory: app
         run: |
           flutter pub get
-          flutter build apk --release --split-per-abi
+          flutter build apk --release --target-platform android-arm64 --split-per-abi
       - name: Stage artifact
         env:
           VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           mkdir -p fork-dist
-          for abi in armeabi-v7a arm64-v8a x86_64; do
-            cp "app/build/app/outputs/flutter-apk/app-$abi-release.apk" "fork-dist/LocalSend-$VERSION-android-$abi.apk"
-          done
+          cp app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "fork-dist/LocalSend-$VERSION-android-arm64-v8a.apk"
       - uses: actions/upload-artifact@v6
         with:
           name: fork-android
@@ -151,7 +211,7 @@ jobs:
           if-no-files-found: error
 
   draft:
-    if: always() && needs.metadata.result == 'success' && needs.windows.result == 'success' && needs.android.result == 'success'
+    if: always() && !inputs.build_only && needs.metadata.result == 'success' && needs.windows.result == 'success' && needs.android.result == 'success'
     needs: [metadata, windows, android]
     runs-on: ubuntu-latest
     permissions:

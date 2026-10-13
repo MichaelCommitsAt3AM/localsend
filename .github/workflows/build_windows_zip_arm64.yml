@@ -107,14 +107,10 @@ jobs:
         working-directory: app
         run: echo {} > build/windows/arm64/runner/Release/settings.json
 
-      # support/build/windows only carries x64 runtime DLLs, so take the arm64 ones from the Visual Studio redist
       - name: Add DLL files
         working-directory: app
         run: |
-          $crt = Get-ChildItem 'C:\Program Files\Microsoft Visual Studio\2022\*\VC\Redist\MSVC\*\arm64\Microsoft.VC143.CRT' | Select-Object -Last 1
-          Copy-Item "$($crt.FullName)\msvcp140.dll" build/windows/arm64/runner/Release/
-          Copy-Item "$($crt.FullName)\vcruntime140.dll" build/windows/arm64/runner/Release/
-          Copy-Item "$($crt.FullName)\vcruntime140_1.dll" build/windows/arm64/runner/Release/
+          & ../support/scripts/copy_windows_runtime.ps1 -Destination build/windows/arm64/runner/Release -Architecture arm64
 
       # The MSIX helper only makes sense for the installer; portable users should not register an MSIX package
       - name: Remove MSIX helper from portable bundle
