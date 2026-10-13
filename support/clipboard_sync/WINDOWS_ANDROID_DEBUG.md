@@ -139,7 +139,8 @@ there is no automatic quality reduction, file sync, or clipboard history.
   in the URL fragment. Android's verified App Link opens the pairing route on
   cold/warm VIEW intents; the fallback website offers a custom-scheme Open app
   button. Both devices still approve before trust is committed. The association
-  file currently covers the installed debug signer, not a production release.
+  file now covers the debug signer and permanent fork release signer. Release
+  camera-link behavior still needs testing with the signed release APK.
   See `app_link_site/README.md` for deployment and release-signing requirements.
 - The page shows saved devices as individual cards, with a green dot for each
   live connection. Pairing alone does not turn on clipboard sharing, so no dots

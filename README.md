@@ -109,7 +109,7 @@ Clipboard sharing uses its own securely stored device identity, pinned mutual TL
 - Delivery is best effort and keeps the latest value. Locked-screen capture, uninterrupted operation during sleep and long-duration reliability are not guaranteed.
 - Pairing currently saves device IP addresses; re-pair if an address changes. Clipboard sharing requires direct local-network connectivity; internet/relay sharing is not planned. Independent security review remains pending.
 - GitHub update checks/downloads and the static pairing-link website use internet services independently of clipboard sync. Neither service carries clipboard contents.
-- Camera-app links use `localsend.currenta.tech`. Verified Android links currently cover the debug signing certificate; production signing requires the association setup described in the [pairing-link deployment guide](support/clipboard_sync/app_link_site/README.md).
+- Camera-app links use `localsend.currenta.tech`. The deployed Android association covers the debug signer and permanent fork release signer; see the [pairing-link deployment guide](support/clipboard_sync/app_link_site/README.md).
 
 See the [development build guide](support/clipboard_sync/WINDOWS_ANDROID_DEBUG.md) for detailed behavior and testing, the [recorded results](support/clipboard_sync/DEBUG_RESULTS.md) for validation evidence, and the [implementation roadmap](support/clipboard_sync/README.md) for the remaining Windows/Android local-network hardening work and deferred platform scope.
 

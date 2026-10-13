@@ -22,7 +22,8 @@ The supplied association covers the existing debug package/signer and the fork's
 release package `org.localsend.localsend_app`, using the public certificate from
 the permanent fork release key generated on 2026-10-13. This is not the clipboard
 certificate fingerprint and does not authorize upstream LocalSend's signer.
-Deploy this updated file before testing camera pairing on the first release APK.
+The updated association was deployed on 2026-10-13 and verified at the custom
+domain. Camera pairing still needs physical testing with the first release APK.
 The debug association can be removed when developer testing ends. Preserve the
 release key for future APK updates; do not replace its fingerprint with a guessed
 or temporary signing certificate.
