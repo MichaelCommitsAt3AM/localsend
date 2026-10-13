@@ -15,6 +15,9 @@ import android.provider.Settings
 import android.webkit.MimeTypeMap
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
+import org.localsend.localsend_app.clipboard.ClipboardChannels
+import org.localsend.localsend_app.clipboard.ClipboardPairingLinks
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.text.SimpleDateFormat
@@ -34,6 +37,14 @@ private const val PERMISSION_ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_L
 private const val API_LEVEL_ANDROID_17 = 37
 
 class MainActivity : FlutterActivity() {
+    override fun provideFlutterEngine(context: Context): FlutterEngine? = FlutterEngineCache.getInstance().get("localsend-main")
+    override fun shouldDestroyEngineWithHost(): Boolean = !ClipboardChannels.retainingEngine
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler(null)
+        ClipboardChannels.detach(this)
+        if (!ClipboardChannels.retainingEngine) FlutterEngineCache.getInstance().remove("localsend-main")
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
     private var pendingResult: MethodChannel.Result? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
 
@@ -46,6 +57,12 @@ class MainActivity : FlutterActivity() {
     private var shareIntentReady = false
 
     override fun onNewIntent(intent: Intent) {
+        if (ClipboardPairingLinks.accept(intent)) {
+            val sanitized = Intent(intent).setData(null)
+            setIntent(sanitized)
+            super.onNewIntent(sanitized)
+            return
+        }
         if (!shareIntentReady && (intent.action == Intent.ACTION_SEND || intent.action == Intent.ACTION_SEND_MULTIPLE)) {
             pendingShareIntents.add(intent)
             return
@@ -76,6 +93,10 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        FlutterEngineCache.getInstance().put("localsend-main", flutterEngine)
+        ClipboardChannels.attach(flutterEngine, this)
+        ClipboardPairingLinks.attach(flutterEngine)
+        if (ClipboardPairingLinks.accept(intent)) setIntent(Intent(intent).setData(null))
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL
@@ -151,6 +172,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        ClipboardChannels.permissionResult(requestCode, grantResults)
         if (requestCode == REQUEST_CODE_LOCAL_NETWORK) {
             pendingPermissionResult?.success(grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
             pendingPermissionResult = null
@@ -329,6 +351,7 @@ class MainActivity : FlutterActivity() {
     @Override
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (ClipboardChannels.activityResult(requestCode, resultCode, data)) return
         if (resultCode == Activity.RESULT_CANCELED) {
             pendingResult?.error("CANCELED", "Canceled", null)
             pendingResult = null

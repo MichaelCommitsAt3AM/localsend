@@ -6,6 +6,7 @@ import 'package:localsend_app/model/persistence/color_mode.dart';
 import 'package:localsend_app/pages/about/about_page.dart';
 import 'package:localsend_app/pages/changelog_page.dart';
 import 'package:localsend_app/pages/donation/donation_page.dart';
+import 'package:localsend_app/pages/settings/clipboard_sync_page.dart';
 import 'package:localsend_app/pages/settings/network_interfaces_page.dart';
 import 'package:localsend_app/pages/tabs/settings_tab_controller.dart';
 import 'package:localsend_app/provider/network/server/server_provider.dart';
@@ -51,6 +52,13 @@ class SettingsTab extends StatelessWidget {
               child: Text(t.settingsTab.title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
             ),
             const SizedBox(height: 30),
+            if (defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.android)
+              ListTile(
+                title: Text(t.clipboardSync.title),
+                leading: const Icon(Icons.content_paste),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push(() => const ClipboardSyncPage()),
+              ),
             _SettingsSection(
               title: t.settingsTab.general.title,
               children: [

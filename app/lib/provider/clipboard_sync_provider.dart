@@ -1,0 +1,564 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:localsend_app/gen/strings.g.dart';
+import 'package:localsend_isolates/rust/api/clipboard.dart';
+import 'package:localsend_isolates/rust/api/crypto.dart' as rust_crypto;
+import 'package:refena_flutter/refena_flutter.dart';
+
+const clipboardSyncPort = 53318;
+final clipboardSyncProvider = NotifierProvider<ClipboardSyncController, ClipboardSyncState>(
+  (ref) => ClipboardSyncController(),
+  debugLabel: 'ClipboardSync',
+);
+
+class ClipboardPeer {
+  final String fingerprint;
+  final String address;
+  final bool send;
+  final bool receive;
+  final String name;
+  final bool pending;
+
+  const ClipboardPeer({
+    required this.fingerprint,
+    required this.address,
+    this.send = true,
+    this.receive = true,
+    this.name = '',
+    this.pending = false,
+  });
+  Map<String, Object> toJson() => {
+    'fingerprint': fingerprint,
+    'address': address,
+    'send': send,
+    'receive': receive,
+    'name': name,
+    'pending': pending,
+  };
+  factory ClipboardPeer.fromJson(Map<String, dynamic> json) {
+    final peer = ClipboardPeer(
+      fingerprint: json['fingerprint'] as String,
+      address: json['address'] as String,
+      send: json['send'] as bool,
+      receive: json['receive'] as bool,
+      name: json['name'] as String? ?? '',
+      pending: json['pending'] as bool? ?? false,
+    );
+    if (!RegExp(r'^[A-F0-9]{64}$').hasMatch(peer.fingerprint) || peer.address.length > 128) {
+      throw const FormatException('Invalid clipboard peer');
+    }
+    return peer;
+  }
+}
+
+/// UI-visible metadata only. Clipboard values and secret keys never enter Refena.
+class ClipboardSyncState {
+  final bool ready;
+  final bool enabled;
+  final bool running;
+  final bool syncImages;
+  final int connected;
+  final Set<String> connectedPeers;
+  final bool hasEnabledBefore;
+  final int captures;
+  final int applied;
+  final String status;
+  final String pairingCode;
+  final List<ClipboardPeer> peers;
+
+  const ClipboardSyncState({
+    this.ready = false,
+    this.enabled = false,
+    this.running = false,
+    this.syncImages = false,
+    this.connected = 0,
+    this.connectedPeers = const {},
+    this.hasEnabledBefore = false,
+    this.captures = 0,
+    this.applied = 0,
+    this.status = 'Disabled',
+    this.pairingCode = '',
+    this.peers = const [],
+  });
+}
+
+class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
+  static const _methods = MethodChannel('org.localsend.localsend_app/clipboard');
+  static const _events = EventChannel('org.localsend.localsend_app/clipboard_events');
+  String? _certificate;
+  String? _privateKey;
+  String _fingerprint = '';
+  String _pairingCode = '';
+  bool _enabled = false;
+  bool _syncImages = false;
+  bool _busy = false;
+  int _connected = 0;
+  Set<String> _connectedPeers = {};
+  bool _hasEnabledBefore = false;
+  int _captures = 0;
+  int _applied = 0;
+  int _sequence = 0;
+  List<ClipboardPeer> _peers = [];
+  RsClipboardRuntime? _runtime;
+  StreamSubscription<dynamic>? _subscription;
+  Future<void> _nativeQueue = Future.value();
+  bool _captureQueued = false;
+  String? _notificationMetadata;
+  String? _captureIssue;
+  String? _screenshotIssue;
+
+  @override
+  ClipboardSyncState init() => const ClipboardSyncState();
+
+  void _publish(String status) {
+    state = ClipboardSyncState(
+      ready: _certificate != null,
+      enabled: _enabled,
+      running: _runtime != null,
+      syncImages: _syncImages,
+      connected: _connected,
+      connectedPeers: Set.unmodifiable(_connectedPeers),
+      hasEnabledBefore: _hasEnabledBefore,
+      captures: _captures,
+      applied: _applied,
+      status: _runtime != null ? _captureIssue ?? _screenshotIssue ?? status : status,
+      pairingCode: _pairingCode,
+      peers: List.unmodifiable(_peers),
+    );
+    if (Platform.isAndroid) {
+      final names = _peers.where((p) => !p.pending && _connectedPeers.contains(p.fingerprint)).map((p) => _pairingName(p.name)).toList();
+      final metadata = jsonEncode({'names': names, 'connected': _connected});
+      if (_notificationMetadata != metadata) {
+        _notificationMetadata = metadata;
+        unawaited(
+          _methods.invokeMethod<void>('updateNotification', {'names': names, 'connected': _connected}).catchError((Object _) {
+            // Notification metadata is best effort; it must not interrupt clipboard sync.
+            _notificationMetadata = null;
+          }),
+        );
+      }
+    }
+  }
+
+  Future<void> initialize() async {
+    if (!Platform.isWindows && !Platform.isAndroid) return;
+    try {
+      final stored = await _methods.invokeMethod<String>('loadSecret');
+      if (stored == null) {
+        final identity = await rust_crypto.generateSecurityContext();
+        _certificate = identity.certificate;
+        _privateKey = identity.privateKey;
+        _fingerprint = identity.certificateHash;
+        await _save();
+      } else {
+        final json = jsonDecode(stored) as Map<String, dynamic>;
+        if (json['version'] != 1) throw const FormatException('Unsupported clipboard configuration');
+        _certificate = json['certificate'] as String;
+        _privateKey = json['privateKey'] as String;
+        _fingerprint = json['fingerprint'] as String;
+        _enabled = json['enabled'] as bool;
+        _hasEnabledBefore = json['hasEnabledBefore'] as bool? ?? _enabled;
+        _syncImages = json['syncImages'] as bool? ?? false;
+        _peers = (json['peers'] as List).map((p) => ClipboardPeer.fromJson(p as Map<String, dynamic>)).toList();
+        if (_peers.length > 8 || !RegExp(r'^[A-F0-9]{64}$').hasMatch(_fingerprint)) {
+          throw const FormatException('Invalid clipboard configuration');
+        }
+      }
+      final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4, includeLoopback: false);
+      final addresses = interfaces.expand((i) => i.addresses).map((a) => a.address).where((a) => !a.startsWith('169.254.')).toSet().toList();
+      _pairingCode = jsonEncode({'version': 1, 'fingerprint': _fingerprint, 'port': clipboardSyncPort, 'addresses': addresses});
+      _publish(_enabled ? 'Starting' : 'Disabled');
+      if (_enabled) await _start();
+    } catch (_) {
+      _certificate = null;
+      _privateKey = null;
+      _enabled = false;
+      _publish('Secure clipboard configuration unavailable. Restore secure storage before pairing.');
+    }
+  }
+
+  Future<void> _save() => _methods.invokeMethod<void>(
+    'saveSecret',
+    {
+      'value': jsonEncode({
+        'version': 1,
+        'certificate': _certificate,
+        'privateKey': _privateKey,
+        'fingerprint': _fingerprint,
+        'enabled': _enabled,
+        'hasEnabledBefore': _hasEnabledBefore,
+        'syncImages': _syncImages,
+        'peers': _peers.map((p) => p.toJson()).toList(),
+      }),
+    },
+  );
+
+  Future<bool> authorize() async {
+    try {
+      final result = await _methods.invokeMapMethod<String, dynamic>('authorize');
+      _publish(result?['authorized'] == true ? 'Clipboard access authorized' : 'Clipboard access not authorized');
+      if (result?['authorized'] == true && _syncImages && Platform.isAndroid) {
+        final photos = await _methods.invokeMethod<bool>('authorizeImages') == true;
+        _screenshotIssue = photos ? null : 'Screenshot sharing paused: allow full photo access';
+        _publish(photos ? 'Clipboard and screenshot access authorized' : _screenshotIssue!);
+      }
+      if (result?['authorized'] == true && _enabled && _runtime == null) await _start();
+      return result?['authorized'] == true;
+    } on PlatformException catch (error) {
+      _publish(error.message ?? 'Clipboard authorization failed');
+      return false;
+    }
+  }
+
+  Future<void> setEnabled(bool value) async {
+    if (_busy) {
+      if (!value) _halt('Disabled');
+      return;
+    }
+    _busy = true;
+    try {
+      if (value) {
+        if (_certificate == null || !_peers.any((p) => !p.pending)) {
+          _publish('Pair a device before enabling clipboard sync');
+          return;
+        }
+        _enabled = true;
+        await _start();
+        if (_runtime == null) {
+          _enabled = false;
+        } else {
+          _hasEnabledBefore = true;
+          _publish(_connected > 0 ? 'Connected' : 'Waiting for paired devices');
+        }
+      } else {
+        _enabled = false;
+        await _stop();
+        _publish('Disabled');
+      }
+      await _save();
+    } catch (_) {
+      await _stop();
+      _enabled = false;
+      _publish('Clipboard configuration could not be saved');
+    } finally {
+      _busy = false;
+    }
+  }
+
+  Future<void> setPeers(List<ClipboardPeer> peers) async {
+    if (_busy || peers.length > 8 || peers.any((p) => p.fingerprint == _fingerprint)) return;
+    if (peers.map((p) => p.fingerprint).toSet().length != peers.length) return;
+    _busy = true;
+    try {
+      await _stop();
+      _peers = List.of(peers);
+      if (_peers.isEmpty) _enabled = false;
+      // Save authorization before any new connection can start.
+      await _save();
+      if (_enabled) {
+        await _start();
+      } else {
+        _publish('Disabled');
+      }
+    } catch (_) {
+      _enabled = false;
+      _publish('Clipboard peer configuration could not be saved');
+    } finally {
+      _busy = false;
+    }
+  }
+
+  Future<void> setSyncImages(bool value) async {
+    if (_busy || _certificate == null) return;
+    _busy = true;
+    try {
+      if (value && Platform.isAndroid && await _methods.invokeMethod<bool>('authorizeImages') != true) {
+        _publish('Allow full photo access to synchronize new screenshots');
+        return;
+      }
+      await _stop();
+      _syncImages = value;
+      await _save();
+      if (_enabled) await _start();
+      _publish(_runtime != null ? 'Waiting for paired devices' : 'Disabled');
+    } catch (_) {
+      _enabled = false;
+      _publish('Image sync preference could not be saved; synchronization is disabled');
+    } finally {
+      _busy = false;
+    }
+  }
+
+  String _pairingName(String alias) {
+    return alias.runes.take(32).map(String.fromCharCode).join().replaceAll(RegExp(r'[\x00-\x1f\x7f]'), '').trim();
+  }
+
+  Future<RsClipboardPairing> hostPairing({required String name}) async {
+    if (_certificate == null) throw StateError('Clipboard identity unavailable');
+    final addresses = (jsonDecode(_pairingCode) as Map<String, dynamic>)['addresses'] as List;
+    return hostClipboardPairing(
+      certificate: _certificate!,
+      privateKey: _privateKey!,
+      port: 53319,
+      addresses: addresses.cast<String>(),
+      name: _pairingName(name).isEmpty ? 'LocalSend' : _pairingName(name),
+      clipboardPort: clipboardSyncPort,
+    );
+  }
+
+  Future<RsClipboardPairing> joinPairing({String? invitation, String? address, required String name}) async {
+    if (_certificate == null) throw StateError('Clipboard identity unavailable');
+    return joinClipboardPairing(
+      certificate: _certificate!,
+      privateKey: _privateKey!,
+      invitation: invitation,
+      address: address,
+      name: _pairingName(name).isEmpty ? 'LocalSend' : _pairingName(name),
+      clipboardPort: clipboardSyncPort,
+    );
+  }
+
+  /// Pending records survive process death but cannot send or receive text.
+  /// Activate only after both endpoints acknowledge protected storage.
+  Future<void> savePairing(RsPairingUpdate update, {required bool pending}) async {
+    if (_busy || _certificate == null || update.fingerprint == _fingerprint || !RegExp(r'^[A-F0-9]{64}$').hasMatch(update.fingerprint)) {
+      throw StateError('Pairing unavailable');
+    }
+    final existing = _peers.where((p) => p.fingerprint != update.fingerprint).toList();
+    if (existing.length >= 8) throw StateError('Clipboard peer limit reached');
+    _busy = true;
+    try {
+      await _stop();
+      _peers = [...existing, ClipboardPeer(fingerprint: update.fingerprint, address: update.address, name: update.name, pending: pending)];
+      await _save();
+      if (_enabled && !pending) await _start();
+      _publish(pending ? 'Finishing pairing' : 'Device paired');
+    } catch (_) {
+      _enabled = false;
+      _publish('Pairing could not be saved; synchronization is disabled');
+      rethrow;
+    } finally {
+      _busy = false;
+    }
+  }
+
+  Future<void> discardPendingPairing(String fingerprint) async {
+    if (_peers.any((p) => p.fingerprint == fingerprint && p.pending)) {
+      await setPeers(_peers.where((p) => p.fingerprint != fingerprint || !p.pending).toList());
+    }
+  }
+
+  Future<void> _start() async {
+    if (_runtime != null) return;
+    try {
+      final native = await _methods.invokeMapMethod<String, dynamic>('status');
+      if (!_enabled) return;
+      if (native?['supported'] != true || native?['authorized'] != true) {
+        _publish('Authorize clipboard access first. Android requires ADB-mode Shizuku and notifications.');
+        return;
+      }
+      _sequence = native?['sequence'] as int? ?? 0;
+      _subscription = _events.receiveBroadcastStream().listen(
+        _nativeEvent,
+        onError: (_) {
+          _halt('Native clipboard monitor unavailable');
+        },
+      );
+      final runtime = await startClipboardRuntime(
+        certificate: _certificate!,
+        privateKey: _privateKey!,
+        port: clipboardSyncPort,
+        syncImages: _syncImages,
+        peers: _peers
+            .where((p) => !p.pending)
+            .map((p) => RsClipboardPeer(fingerprint: p.fingerprint, address: p.address, send: p.send, receive: p.receive))
+            .toList(),
+      );
+      if (!_enabled) {
+        await runtime.stop();
+        return;
+      }
+      _runtime = runtime;
+      if (Platform.isAndroid) _captureIssue = 'Starting Android clipboard listener';
+      await _methods.invokeMethod<void>('start', {'syncImages': _syncImages});
+      if (_runtime != runtime) return;
+      _publish('Waiting for paired devices');
+      unawaited(_updates(runtime));
+    } catch (_) {
+      await _stop();
+      _publish('Clipboard sync could not start. Check port, pairing and native permissions.');
+    }
+  }
+
+  void _nativeEvent(dynamic event) {
+    if (_runtime == null || event is! Map) return;
+    switch (event['kind']) {
+      case 'changed':
+        _requestCapture();
+      case 'status':
+        _publish(event['message'] as String? ?? 'Clipboard monitor ready');
+      case 'captureUnavailable':
+        _captureIssue = event['message'] as String? ?? 'Android clipboard capture unavailable';
+        _publish(_captureIssue!);
+      case 'captureReady':
+        _captureIssue = null;
+        _publish(_connected > 0 ? 'Connected' : 'Waiting for paired devices');
+      case 'screenshotUnavailable':
+        _screenshotIssue = event['message'] as String? ?? 'Screenshot sharing unavailable';
+        _publish(_screenshotIssue!);
+      case 'screenshotReady':
+        _screenshotIssue = null;
+        _publish(_connected > 0 ? 'Connected' : 'Waiting for paired devices');
+      case 'fatal':
+        _halt(event['message'] as String? ?? 'Clipboard monitor failed');
+      case 'stopped':
+        _halt('Disabled');
+    }
+  }
+
+  void _halt(String reason) {
+    _enabled = false;
+    final stop = _stop();
+    _publish(reason);
+    unawaited(
+      stop
+          .then((_) async {
+            await _save();
+            _publish(reason);
+          })
+          .catchError((Object _) {
+            _publish(reason);
+          }),
+    );
+  }
+
+  Future<void> _enqueue(Future<void> Function() work) {
+    final next = _nativeQueue.then((_) => work());
+    _nativeQueue = next.catchError((Object _) {
+      _publish('Native clipboard operation failed');
+    });
+    return next;
+  }
+
+  void _requestCapture([int retry = 0]) {
+    if (_captureQueued) return;
+    _captureQueued = true;
+    unawaited(
+      _enqueue(() async {
+        _captureQueued = false;
+        final runtime = _runtime;
+        if (runtime == null) return;
+        try {
+          final data = await _methods.invokeMapMethod<String, dynamic>('read');
+          if (_runtime != runtime) return;
+          _sequence = data?['sequence'] as int? ?? _sequence;
+          if (data?['suppressEcho'] == true) return;
+          final image = data?['image'] as Uint8List?;
+          if (_syncImages && image != null) {
+            await runtime.captureImage(imagePng: image);
+          } else {
+            await runtime.captureText(text: data?['text'] as String?);
+          }
+          _captures++;
+          _publish(_connected > 0 ? 'Connected' : 'Waiting for paired devices');
+        } on PlatformException catch (error) {
+          try {
+            await runtime.captureText();
+          } catch (_) {
+            /* Owner may already have stopped. */
+          }
+          if (error.code == 'CLIPBOARD_BUSY' && retry < 4) {
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+            _requestCapture(retry + 1);
+          } else {
+            _publish('Clipboard capture unavailable');
+          }
+        } catch (_) {
+          _publish('Clipboard capture rejected');
+        }
+      }).catchError((Object _) {}),
+    );
+  }
+
+  Future<void> _updates(RsClipboardRuntime runtime) async {
+    var revision = BigInt.zero;
+    try {
+      while (_runtime == runtime) {
+        final update = await runtime.nextUpdate(after: revision);
+        if (_runtime != runtime) return;
+        if (update == null) {
+          await _stop();
+          _publish('Clipboard runtime stopped; disable and enable sync to restart');
+          return;
+        }
+        revision = update.revision;
+        _connectedPeers = update.connectedPeers.toSet();
+        _connected = _connectedPeers.length;
+        _publish(update.error ?? (_connected > 0 ? 'Connected' : 'Waiting for paired devices'));
+        final text = update.text;
+        final image = update.imagePng;
+        final peer = _peers.where((p) => p.fingerprint == update.origin && !p.pending).firstOrNull;
+        final deviceName = _pairingName(peer?.name ?? '');
+        if (text != null || image != null) {
+          await _enqueue(() async {
+            if (_runtime != runtime) return;
+            final expected = _sequence;
+            final shouldApply = image != null
+                ? _syncImages && await runtime.shouldApplyImage(imagePng: image)
+                : await runtime.shouldApply(text: text!);
+            if (!shouldApply || _runtime != runtime) return;
+            try {
+              _sequence =
+                  await _methods.invokeMethod<int>(
+                    image != null ? 'writeImage' : 'write',
+                    {
+                      if (image != null) ...{
+                        'image': image,
+                        'notificationTitle': t.clipboardSync.imageArrivedTitle,
+                        'notificationBody': t.clipboardSync.imageArrivedBody(device: deviceName.isEmpty ? t.clipboardSync.unnamedDevice : deviceName),
+                      } else
+                        'text': text,
+                      'sequence': expected,
+                    },
+                  ) ??
+                  _sequence;
+              _applied++;
+              _publish('Connected');
+            } on PlatformException catch (error) {
+              if (error.code == 'STALE_WRITE') {
+                _requestCapture();
+              } else {
+                _publish('Remote clipboard write failed; copy again when the clipboard is available');
+              }
+            }
+          });
+        }
+      }
+    } catch (_) {
+      if (_runtime == runtime) {
+        await _stop();
+        _publish('Clipboard connection stopped unexpectedly');
+      }
+    }
+  }
+
+  Future<void> _stop() async {
+    final runtime = _runtime;
+    _runtime = null;
+    _captureIssue = null;
+    _screenshotIssue = null;
+    _connected = 0;
+    _connectedPeers = {};
+    await runtime?.stop();
+    try {
+      await _methods.invokeMethod<void>('stop');
+    } catch (_) {
+      /* Still release Rust ownership. */
+    }
+    await _subscription?.cancel();
+    _subscription = null;
+  }
+}

@@ -13,6 +13,7 @@ import 'package:localsend_app/pages/home_page_controller.dart';
 import 'package:localsend_app/pages/whats_new_page.dart';
 import 'package:localsend_app/provider/animation_provider.dart';
 import 'package:localsend_app/provider/app_arguments_provider.dart';
+import 'package:localsend_app/provider/clipboard_sync_provider.dart';
 import 'package:localsend_app/provider/device_info_provider.dart';
 import 'package:localsend_app/provider/network/nearby_devices_provider.dart';
 import 'package:localsend_app/provider/network/server/server_provider.dart';
@@ -188,6 +189,7 @@ Future<RefenaContainer> preInit(List<String> args) async {
   );
 
   await container.redux(parentIsolateProvider).dispatchAsync(IsolateSetupAction());
+  await container.notifier(clipboardSyncProvider).initialize();
 
   return container;
 }

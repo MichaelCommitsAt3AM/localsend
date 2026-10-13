@@ -1,3 +1,5 @@
+#[cfg(feature = "http")]
+pub mod clipboard;
 #[cfg(feature = "crypto")]
 pub mod crypto;
 #[cfg(feature = "discovery")]

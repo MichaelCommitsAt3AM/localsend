@@ -26,6 +26,7 @@ android {
     namespace "org.localsend.localsend_app"
     compileSdkVersion 36
     ndkVersion flutter.ndkVersion
+    buildFeatures { aidl true }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -85,6 +86,12 @@ android {
 
 flutter {
     source '../..'
+}
+
+dependencies {
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
+    implementation 'dev.rikka.shizuku:api:13.1.5'
+    implementation 'dev.rikka.shizuku:provider:13.1.5'
 }
 
 // To comply with F-Droid version code schema

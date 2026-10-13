@@ -1,4 +1,10 @@
-# LocalSend
+# LocalSend Clipboard Sync
+
+A development fork of [LocalSend](https://github.com/localsend/localsend) with automatic clipboard sharing between explicitly paired Windows and Android devices. Regular LocalSend file and message transfers remain available.
+
+**Current scope:** Windows-Android direct LAN clipboard sync. This is a development build, not a completed production release. Linux clipboard integration, other platform adapters and an optional self-hosted relay are still pending.
+
+The badges and project links below refer to upstream LocalSend.
 
 [![CI status][ci-badge]][ci-workflow]
 [![Translations][translate-badge]][translate-link]
@@ -23,6 +29,10 @@
 LocalSend is a free, open-source app that allows you to securely share files and messages with nearby devices over your local network without needing an internet connection.
 
 - [About](#about)
+- [Fork Changes](#fork-changes)
+  - [Clipboard Setup](#clipboard-setup)
+  - [Privacy and Current Limits](#privacy-and-current-limits)
+  - [Fork Builds and Updates](#fork-builds-and-updates)
 - [Sponsors](#sponsors)
 - [Screenshots](#screenshots)
 - [Download](#download)
@@ -45,7 +55,80 @@ LocalSend is a free, open-source app that allows you to securely share files and
 
 LocalSend is a cross-platform app that enables secure communication between devices using a REST API and HTTPS encryption. Unlike other messaging apps that rely on external servers, LocalSend doesn't require an internet connection or third-party servers, making it a fast and reliable solution for local communication.
 
+## Fork Changes
+
+| Feature | Behavior in this fork |
+| --- | --- |
+| Automatic clipboard sharing | New plain-text copies sync both ways between authorized devices. Sharing starts disabled. |
+| Optional image sharing | **Synchronize copied images** includes copied photos and screenshots; enable it on both devices. |
+| Android screenshots | Newly saved screenshots in the standard screenshot albums sync automatically under the same image option, with full photo access. |
+| Background operation | Windows can stay in the tray; Android uses an ongoing service and Shizuku while its screen is closed. Sleep and lock restrictions still apply. |
+| Easy pairing | Add devices with a QR code or the nearby-device list, compare the code and approve on both devices. Manual pairing is an advanced fallback. |
+| Simple device controls | Each device has its own card and a green dot when connected. Tap a card to manage send/receive access or remove it with confirmation. |
+| Android onboarding | First-time enabling explains Shizuku in a bottom sheet. **More > Setup tutorial** opens the same installation, permission and pairing guide. |
+| Image arrival notifications | Windows and Android announce successfully received clipboard images so users know when they are ready to paste. Text arrivals are silent. |
+| Android ongoing notification | Shows only connected device counts and names; paired devices that are offline are omitted. |
+| Consistent default colors | New installs use LocalSend teal on every platform and in all build types. Other color choices remain available in Settings. |
+
+Clipboard support is separate from upstream LocalSend's platform support:
+
+| Platform | Clipboard status |
+| --- | --- |
+| Windows | Implemented; tested with the custom debug build. |
+| Android 13-16 | Implemented through Shizuku's wireless-debugging/computer startup mode; physical testing performed on a Galaxy A35 running Android 16. |
+| Linux, macOS, iOS and other platforms | Clipboard adapters are not implemented in this fork yet. KDE Wayland testing is deferred. |
+
+### Clipboard Setup
+
+1. Install this fork on both devices and keep them on the same reachable local network. Official LocalSend builds do not include this clipboard feature.
+2. On Android, [install Shizuku](https://shizuku.rikka.app/download/) and start it using [wireless debugging or a computer](https://shizuku.rikka.app/guide/setup/). In LocalSend, **Settings > Clipboard sync > More > Setup tutorial** walks through installation, starting Shizuku, permissions and pairing. Use **Android permissions** to authorize LocalSend and allow notifications. Start Shizuku again after a phone reboot.
+3. On Windows, open **Settings > Clipboard sync > Add device**. Scan the QR code with LocalSend on your phone, or with its normal camera on the configured Android debug build. Compare the displayed codes and confirm on both devices. You can also select a nearby device. Pairing alone does not enable sharing.
+4. Turn on **Share clipboard** on both devices and accept the sharing confirmation. A green dot beside a device means its clipboard connection is active. Copy new text on one device and paste on the other.
+5. To include images, turn on **Synchronize copied images** on both devices. Allow **full photo access** on Android for automatic screenshot sharing; selected-photo access cannot include future screenshots. Paste images into an app that supports image paste, such as Paint on Windows.
+
+Keep Windows LocalSend running in the tray and Android's clipboard service running for background sharing. Force-stopping Android LocalSend stops the service.
+
+The fork adds these TCP ports to LocalSend's usual file-transfer/discovery port:
+
+| Purpose | Port | When used |
+| --- | --- | --- |
+| Clipboard sharing | 53318 | While clipboard sharing is enabled. |
+| Device pairing | 53319 | Temporarily while Add device is open. |
+
+Allow these connections on the intended local network. Guest Wi-Fi or access-point isolation can prevent devices from connecting. Normal file transfer still uses LocalSend's configured port, 53317 by default.
+
+### Privacy and Current Limits
+
+Clipboard sharing uses its own securely stored device identity, pinned mutual TLS 1.3 connections and explicit peer permissions. Windows protects the identity with DPAPI; Android uses its Keystore. LocalSend favorites do not authorize clipboard sharing. There is no clipboard history or clipboard-content logging, no forwarding between peers and no startup broadcast of existing clipboard contents.
+
+- Only new copies are shared. Clipboard items marked sensitive are skipped; unmarked text or screenshots can still contain private information. Pair only devices you control and trust.
+- Text is limited to 64 KiB. Images are normalized to PNG with limits of 8 MiB, 16 megapixels and 16384 pixels per dimension. Received Android image data is retained for up to five minutes. Unsupported or oversized content is skipped.
+- Automatic Android screenshots are recognized in `DCIM/Screenshots` and `Pictures/Screenshots` with supported screenshot names. Old screenshots are not sent when sharing starts. Custom screenshot locations are not supported yet. Ordinary saved camera photos are not automatically shared; explicitly copy them.
+- Rich text, multiple clipboard items and remote clipboard clearing are not implemented. Some Android image providers restrict access to copied images.
+- Delivery is best effort and keeps the latest value. Locked-screen capture, uninterrupted operation during sleep and long-duration reliability are not guaranteed.
+- Pairing currently saves device IP addresses; re-pair if an address changes. Internet/relay clipboard sharing and independent security review remain pending.
+- Camera-app links use `localsend.currenta.tech`. Verified Android links currently cover the debug signing certificate; production signing requires the association setup described in the [pairing-link deployment guide](support/clipboard_sync/app_link_site/README.md).
+
+See the [development build guide](support/clipboard_sync/WINDOWS_ANDROID_DEBUG.md) for detailed behavior and testing, the [recorded results](support/clipboard_sync/DEBUG_RESULTS.md) for validation evidence, and the [implementation roadmap](support/clipboard_sync/README.md) for the remaining production, Linux and relay work.
+
+### Fork Builds and Updates
+
+Use the Flutter version pinned in [.fvmrc](.fvmrc) through FVM, plus the Rust and native platform build tools. From `app/`:
+
+```shell
+fvm flutter pub get
+fvm flutter build windows --debug
+fvm flutter build apk --debug --target-platform android-arm64
+```
+
+- Windows: `app/build/windows/x64/runner/Debug/localsend_app.exe`. Keep the complete Debug directory together, including its DLLs and `data` directory.
+- Android: `app/build/app/outputs/flutter-apk/app-debug.apk`. The debug package is `org.localsend.localsend_app.debug`, with separate app settings from official LocalSend.
+
+This fork has no internal updater. Update manually with a new APK or the complete Windows bundle. The store/package-manager links below install upstream LocalSend, not this fork. Debug builds do not carry upstream release-signing guarantees.
+
 ## Sponsors
+
+This section describes upstream LocalSend sponsorship.
 
 This project is tested with BrowserStack
 
@@ -57,9 +140,13 @@ Supported by TestMu AI
 
 ## Screenshots
 
+These are upstream LocalSend screenshots; they do not show this fork's clipboard UI.
+
 <img src="https://localsend.org/img/screenshot-iphone.webp" alt="iPhone screenshot" height="300"/> <img src="https://localsend.org/img/screenshot-pc.webp" alt="PC screenshot" height="300"/>
 
 ## Download
+
+**Upstream LocalSend downloads.** For this fork, use [Fork Builds and Updates](#fork-builds-and-updates).
 
 [![Packaging status](https://repology.org/badge/tiny-repos/localsend.svg)](https://repology.org/project/localsend/versions)
 
@@ -77,7 +164,7 @@ It is recommended to download the app either from an app store or from a package
 
 Read more about [distribution channels][].
 
-Windows binaries are signed. Read more about the [Code signing policy][].
+Upstream Windows release binaries are signed. Read more about the [Code signing policy][].
 
 > [!CAUTION]
 > **Unofficial MSIX preview:** you can try builds from the latest commits at [localsend.ob-buff.dev](https://localsend.ob-buff.dev/). Stability is not guaranteed and all custom code tweaks are listed on that site.
@@ -100,6 +187,8 @@ Windows binaries are signed. Read more about the [Code signing policy][].
 [code signing policy]: https://github.com/localsend/localsend/blob/main/CODE_SIGNING.md
 
 **Compatibility**
+
+This is upstream file-transfer compatibility. Clipboard support has the narrower platform requirements listed under [Fork Changes](#fork-changes).
 
 | Platform | Minimum Version | Note                                                                                                                        |
 |----------|-----------------|-----------------------------------------------------------------------------------------------------------------------------|
@@ -141,7 +230,9 @@ On v1.14.0 and earlier, the app starts hidden if `autostart` flag is set, and th
 
 ## How It Works
 
-LocalSend uses a secure communication protocol that allows devices to communicate with each other using a REST API. All data is sent securely over HTTPS, and the TLS/SSL certificate is generated on the fly on each device, ensuring maximum security.
+LocalSend uses a secure communication protocol that allows devices to communicate with each other using a REST API. File and message data is sent securely over HTTPS, and the TLS/SSL certificate is generated on the fly on each device.
+
+This fork's clipboard traffic uses a separate mutually authenticated TLS channel on TCP 53318, described above.
 
 For more information on the LocalSend Protocol, see the [documentation](https://github.com/localsend/protocol).
 
@@ -155,13 +246,13 @@ To compile LocalSend from the source code, follow these steps:
 
 1. Install Flutter [directly](https://flutter.dev) or using [fvm](https://fvm.app) (see [version required](.fvmrc))
 2. Install [Rust](https://www.rust-lang.org/tools/install)
-3. Clone the `LocalSend` repository
+3. Clone this fork for the clipboard feature, or the upstream repository for standard LocalSend
 4. Run `cd app` to enter the app directory
-5. Run `flutter pub get` to download dependencies
-6. Run `flutter run` to start the app
+5. Run `fvm flutter pub get` to download dependencies
+6. Run `fvm flutter run` to start the app
 
 > [!NOTE]
-> LocalSend currently requires an older Flutter version (specified in [.fvmrc](.fvmrc))
+> LocalSend requires the pinned Flutter version specified in [.fvmrc](.fvmrc)
 > and thus build issues may be caused by a mismatch between the required and the (system-wide) installed Flutter version.  
 > To make development more consistent, LocalSend uses [fvm](https://fvm.app) to manage the project Flutter version.
 > After installing `fvm`, run `fvm flutter` instead of `flutter`.
@@ -252,25 +343,25 @@ These commands are intended for maintainers only. Make sure to run them from the
 Traditional APK
 
 ```bash
-flutter build apk
+fvm flutter build apk
 ```
 
 AppBundle for Google Play
 
 ```bash
-flutter build appbundle
+fvm flutter build appbundle
 ```
 
 ### iOS
 
 ```bash
-flutter build ipa
+fvm flutter build ipa
 ```
 
 ### macOS
 
 ```bash
-flutter build macos
+fvm flutter build macos
 ```
 
 ### Windows
@@ -278,19 +369,19 @@ flutter build macos
 **Traditional**
 
 ```bash
-flutter build windows
+fvm flutter build windows
 ```
 
 **Local MSIX App**
 
 ```bash
-flutter pub run msix:create
+fvm flutter pub run msix:create
 ```
 
 **Store ready**
 
 ```bash
-flutter pub run msix:create --store
+fvm flutter pub run msix:create --store
 ```
 
 ### Linux
@@ -298,7 +389,7 @@ flutter pub run msix:create --store
 **Traditional**
 
 ```bash
-flutter build linux
+fvm flutter build linux
 ```
 
 **AppImage**

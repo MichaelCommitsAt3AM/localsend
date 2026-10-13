@@ -22,3 +22,10 @@
 
 # Generated at build time by makepri (see support/scripts/compile_windows_msix_helper.ps1)
 /support/build/msix/content/resources.pri
+
+# Generated pairing-site upload and HTTP validation artifacts
+/support/clipboard_sync/app_link_site/*.zip
+/support/clipboard_sync/app_link_site/domain-check.*
+
+# Local Cloudflare CLI account/deployment cache
+/.wrangler/

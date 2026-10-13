@@ -46,6 +46,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
   /// en: 'LocalSend'
   String get appName => 'LocalSend';
 
+  late final Translations$clipboardSync$en clipboardSync = Translations$clipboardSync$en.internal(_root);
   late final Translations$general$en general = Translations$general$en.internal(_root);
   late final Translations$receiveTab$en receiveTab = Translations$receiveTab$en.internal(_root);
   late final Translations$sendTab$en sendTab = Translations$sendTab$en.internal(_root);
@@ -73,6 +74,375 @@ class Translations with BaseTranslations<AppLocale, Translations> {
   late final Translations$tray$en tray = Translations$tray$en.internal(_root);
   late final Translations$web$en web = Translations$web$en.internal(_root);
   late final Translations$assetPicker$en assetPicker = Translations$assetPicker$en.internal(_root);
+}
+
+// Path: clipboardSync
+class Translations$clipboardSync$en {
+  Translations$clipboardSync$en.internal(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+
+  /// en: 'Clipboard sync'
+  String get title => 'Clipboard sync';
+
+  /// en: 'Copy on one device. Paste on another.'
+  String get simpleDescription => 'Copy on one device. Paste on another.';
+
+  /// en: 'Share new text copies with your devices.'
+  String get textSummary => 'Share new text copies with your devices.';
+
+  /// en: 'Include photos and screenshots.'
+  String get imagesSummary => 'Include photos and screenshots.';
+
+  /// en: 'Add a device to start sharing.'
+  String get addDeviceFirst => 'Add a device to start sharing.';
+
+  /// en: 'Sharing is off'
+  String get syncOff => 'Sharing is off';
+
+  /// en: 'Ready to share'
+  String get readyToShare => 'Ready to share';
+
+  /// en: 'Waiting for your devices'
+  String get waitingForDevices => 'Waiting for your devices';
+
+  /// en: 'Getting ready…'
+  String get gettingReady => 'Getting ready…';
+
+  /// en: 'Sharing needs attention'
+  String get needsAttention => 'Sharing needs attention';
+
+  /// en: 'Set up access'
+  String get setupAccess => 'Set up access';
+
+  /// en: 'Android permissions'
+  String get androidAccess => 'Android permissions';
+
+  /// en: 'View details'
+  String get viewDetails => 'View details';
+
+  /// en: 'Paired device'
+  String get devicePlaceholder => 'Paired device';
+
+  /// en: 'Sharing both ways'
+  String get bothWays => 'Sharing both ways';
+
+  /// en: 'Sending only'
+  String get sendOnly => 'Sending only';
+
+  /// en: 'Receiving only'
+  String get receiveOnly => 'Receiving only';
+
+  /// en: 'Sharing paused'
+  String get sharingPaused => 'Sharing paused';
+
+  /// en: 'Add your first device'
+  String get noDevices => 'Add your first device';
+
+  /// en: 'Add your phone or computer with a QR code. Keep both on the same network.'
+  String get noDevicesHint => 'Add your phone or computer with a QR code. Keep both on the same network.';
+
+  /// en: 'How it works'
+  String get howItWorks => 'How it works';
+
+  /// en: 'More options'
+  String get moreOptions => 'More options';
+
+  /// en: 'Clipboard access was interrupted. Try copying again. If this continues, turn sharing off and on, then check the connection details.'
+  String get clipboardHelp =>
+      'Clipboard access was interrupted. Try copying again. If this continues, turn sharing off and on, then check the connection details.';
+
+  /// en: 'Pair devices you trust, then turn on clipboard sharing on both. New copies are shared automatically while both devices are on the same network.'
+  String get helpBasics =>
+      'Pair devices you trust, then turn on clipboard sharing on both. New copies are shared automatically while both devices are on the same network.';
+
+  /// en: 'Turn on image sharing on both devices to include copied photos. On Android, it also shares newly saved screenshots from the standard screenshot albums after you allow full photo access. Images can be up to 8 MiB and 16 megapixels. Received images stay available to paste for five minutes.'
+  String get helpImages =>
+      'Turn on image sharing on both devices to include copied photos. On Android, it also shares newly saved screenshots from the standard screenshot albums after you allow full photo access. Images can be up to 8 MiB and 16 megapixels. Received images stay available to paste for five minutes.';
+
+  /// en: 'Only paired devices can share your clipboard. Old copies and older screenshots are not sent when sharing starts. Text or screenshots can contain private information, so only pair devices you control. Clipboard items marked sensitive are skipped.'
+  String get helpPrivacy =>
+      'Only paired devices can share your clipboard. Old copies and older screenshots are not sent when sharing starts. Text or screenshots can contain private information, so only pair devices you control. Clipboard items marked sensitive are skipped.';
+
+  /// en: 'Android uses Shizuku to read copies made in other apps. Start Shizuku, then use Android permissions in the More menu to allow clipboard access and, for screenshots, full photo access.'
+  String get helpAndroid =>
+      'Android uses Shizuku to read copies made in other apps. Start Shizuku, then use Android permissions in the More menu to allow clipboard access and, for screenshots, full photo access.';
+
+  /// en: 'Development build details'
+  String get buildDetails => 'Development build details';
+
+  /// en: 'Network address'
+  String get addressLabel => 'Network address';
+
+  /// en: 'Device identity'
+  String get identityLabel => 'Device identity';
+
+  /// en: 'Open Shizuku and start it, then return here to allow clipboard access.'
+  String get shizukuHelp => 'Open Shizuku and start it, then return here to allow clipboard access.';
+
+  /// en: 'Allow full photo access to share new screenshots automatically. Copied images can still be shared.'
+  String get photoHelp => 'Allow full photo access to share new screenshots automatically. Copied images can still be shared.';
+
+  /// en: 'Allow the Android permissions needed to share your clipboard.'
+  String get accessHelp => 'Allow the Android permissions needed to share your clipboard.';
+
+  /// en: 'This image could not be shared. Try a smaller image (up to 8 MiB and 16 megapixels).'
+  String get imageLimitHelp => 'This image could not be shared. Try a smaller image (up to 8 MiB and 16 megapixels).';
+
+  /// en: 'Clipboard settings could not be loaded or saved. Restart LocalSend and check the connection details if this continues.'
+  String get settingsHelp => 'Clipboard settings could not be loaded or saved. Restart LocalSend and check the connection details if this continues.';
+
+  /// en: 'Sharing was interrupted. Check that both devices are on the same network and have clipboard sharing turned on. Connection details can help identify the problem.'
+  String get connectionHelp =>
+      'Sharing was interrupted. Check that both devices are on the same network and have clipboard sharing turned on. Connection details can help identify the problem.';
+
+  /// en: 'Automatically share new clipboard copies with explicitly paired devices on your local network.'
+  String get description => 'Automatically share new clipboard copies with explicitly paired devices on your local network.';
+
+  /// en: 'Synchronize copied images'
+  String get syncImages => 'Synchronize copied images';
+
+  /// en: 'LocalSend image received'
+  String get imageArrivedTitle => 'LocalSend image received';
+
+  /// en: 'Image received from {device}. Ready to paste.'
+  String imageArrivedBody({required Object device}) => 'Image received from ${device}. Ready to paste.';
+
+  /// en: 'a paired device'
+  String get unnamedDevice => 'a paired device';
+
+  /// en: 'Enable on both devices to share copied images and new Android screenshots automatically. Android needs full photo access for screenshots in the standard screenshot albums. Images are converted to PNG (up to 8 MiB and 16 megapixels). Received images remain available to paste for five minutes. Sensitive-marked clipboard images are skipped.'
+  String get syncImagesDescription =>
+      'Enable on both devices to share copied images and new Android screenshots automatically. Android needs full photo access for screenshots in the standard screenshot albums. Images are converted to PNG (up to 8 MiB and 16 megapixels). Received images remain available to paste for five minutes. Sensitive-marked clipboard images are skipped.';
+
+  /// en: 'Share clipboard'
+  String get enable => 'Share clipboard';
+
+  /// en: 'New unmarked text copies, including passwords or other private text, can be shared with your paired devices. When image sync is enabled, copied images and newly saved Android screenshots are also shared. Sensitive-marked and unsupported clips are skipped. Existing clipboard content and old screenshots are not sent when you enable sync. Only pair devices you control and trust.'
+  String get consent =>
+      'New unmarked text copies, including passwords or other private text, can be shared with your paired devices. When image sync is enabled, copied images and newly saved Android screenshots are also shared. Sensitive-marked and unsupported clips are skipped. Existing clipboard content and old screenshots are not sent when you enable sync. Only pair devices you control and trust.';
+
+  /// en: 'Authorize clipboard and photo access'
+  String get authorize => 'Authorize clipboard and photo access';
+
+  /// en: 'Connected devices'
+  String get connected => 'Connected devices';
+
+  /// en: 'Your devices'
+  String get pairedDevices => 'Your devices';
+
+  /// en: 'Capture notifications'
+  String get captures => 'Capture notifications';
+
+  /// en: 'Remote writes'
+  String get applied => 'Remote writes';
+
+  /// en: 'This device’s pairing code'
+  String get ownCode => 'This device’s pairing code';
+
+  /// en: 'Copy this public code directly to your other device. Add each device’s code on the other, verify the identity, then enable sync on both. Choose reachable addresses on the same network.'
+  String get codeInstructions =>
+      'Copy this public code directly to your other device. Add each device’s code on the other, verify the identity, then enable sync on both. Choose reachable addresses on the same network.';
+
+  /// en: 'Copy pairing code'
+  String get copyCode => 'Copy pairing code';
+
+  /// en: 'Pairing code copied'
+  String get codeCopied => 'Pairing code copied';
+
+  /// en: 'Could not copy pairing code. Try again.'
+  String get copyFailed => 'Could not copy pairing code. Try again.';
+
+  /// en: 'Add device'
+  String get addDevice => 'Add device';
+
+  /// en: 'Scan QR code'
+  String get scanQr => 'Scan QR code';
+
+  /// en: 'On your phone, open Add device and scan this QR code. Keep both devices on the same network.'
+  String get qrInstructions => 'On your phone, open Add device and scan this QR code. Keep both devices on the same network.';
+
+  /// en: 'Or open Add device on both devices, then select a nearby device below.'
+  String get nearbyInstructions => 'Or open Add device on both devices, then select a nearby device below.';
+
+  /// en: 'Nearby devices'
+  String get nearby => 'Nearby devices';
+
+  /// en: 'No devices found yet. Open LocalSend on your other device and refresh.'
+  String get noNearby => 'No devices found yet. Open LocalSend on your other device and refresh.';
+
+  /// en: 'Refresh'
+  String get refresh => 'Refresh';
+
+  /// en: 'This invitation expires in {seconds} seconds.'
+  String expires({required Object seconds}) => 'This invitation expires in ${seconds} seconds.';
+
+  /// en: 'Do these codes match?'
+  String get verifyCode => 'Do these codes match?';
+
+  /// en: 'Compare the code shown on both devices. Confirm only if they match and this is the device you want to pair.'
+  String get verifyInstructions => 'Compare the code shown on both devices. Confirm only if they match and this is the device you want to pair.';
+
+  /// en: 'Codes match — pair'
+  String get codesMatch => 'Codes match — pair';
+
+  /// en: 'Waiting for the other device to confirm…'
+  String get waitingApproval => 'Waiting for the other device to confirm…';
+
+  /// en: 'Device paired'
+  String get paired => 'Device paired';
+
+  /// en: 'Pairing is saved on both devices. Enable clipboard sync on each when you are ready.'
+  String get pairedInstructions => 'Pairing is saved on both devices. Enable clipboard sync on each when you are ready.';
+
+  /// en: 'Pairing could not finish. Check that both devices are on the same network and have Add device open, then try again.'
+  String get pairingFailed => 'Pairing could not finish. Check that both devices are on the same network and have Add device open, then try again.';
+
+  /// en: 'This pairing invitation expired. Create a new one to try again.'
+  String get pairingExpired => 'This pairing invitation expired. Create a new one to try again.';
+
+  /// en: 'Connecting…'
+  String get pairingWorking => 'Connecting…';
+
+  /// en: 'Saving pairing securely…'
+  String get pairingSaving => 'Saving pairing securely…';
+
+  /// en: 'Create new invitation'
+  String get tryAgain => 'Create new invitation';
+
+  /// en: 'Manual pairing'
+  String get advanced => 'Manual pairing';
+
+  /// en: 'Connection details'
+  String get diagnostics => 'Connection details';
+
+  /// en: 'Technical details'
+  String get details => 'Technical details';
+
+  /// en: 'Pairing incomplete — remove and pair again'
+  String get pending => 'Pairing incomplete — remove and pair again';
+
+  /// en: 'Codes differ — cancel'
+  String get reject => 'Codes differ — cancel';
+
+  /// en: 'Scan the QR code shown in LocalSend’s Add device screen'
+  String get scanPrompt => 'Scan the QR code shown in LocalSend’s Add device screen';
+
+  /// en: 'Pair a clipboard device'
+  String get pair => 'Pair a clipboard device';
+
+  /// en: 'Other device’s pairing code'
+  String get peerCode => 'Other device’s pairing code';
+
+  /// en: 'Verify the other device'
+  String get verify => 'Verify the other device';
+
+  /// en: 'I checked this identity directly on the other device and authorize sending and receiving clipboard text'
+  String get verified => 'I checked this identity directly on the other device and authorize sending and receiving clipboard text';
+
+  /// en: 'Send my clipboard to this device'
+  String get send => 'Send my clipboard to this device';
+
+  /// en: 'Receive this device’s clipboard'
+  String get receive => 'Receive this device’s clipboard';
+
+  /// en: 'Remove device'
+  String get revoke => 'Remove device';
+
+  /// en: 'Remove paired device?'
+  String get removeTitle => 'Remove paired device?';
+
+  /// en: 'Remove {device}? Clipboard sharing with this device will stop. You’ll need to pair it again to reconnect.'
+  String removeMessage({required Object device}) =>
+      'Remove ${device}? Clipboard sharing with this device will stop. You’ll need to pair it again to reconnect.';
+
+  /// en: 'Invalid or duplicate pairing code. Copy the complete code from the other device.'
+  String get invalidCode => 'Invalid or duplicate pairing code. Copy the complete code from the other device.';
+
+  /// en: 'Windows–Android development build: direct LAN sync, with text up to 64 KiB and optional copied images up to 8 MiB / 16 megapixels. Android needs ADB-mode Shizuku on Android 13–16; some apps may not grant access to their copied images. Locked-screen capture and uninterrupted operation during sleep are not guaranteed. Re-pair if a saved IP address changes. Hosted relay and Linux integration are still pending.'
+  String get limitations =>
+      'Windows–Android development build: direct LAN sync, with text up to 64 KiB and optional copied images up to 8 MiB / 16 megapixels. Android needs ADB-mode Shizuku on Android 13–16; some apps may not grant access to their copied images. Locked-screen capture and uninterrupted operation during sleep are not guaranteed. Re-pair if a saved IP address changes. Hosted relay and Linux integration are still pending.';
+
+  /// en: 'Setup tutorial'
+  String get tutorial => 'Setup tutorial';
+
+  /// en: 'Android needs Shizuku'
+  String get setupTitle => 'Android needs Shizuku';
+
+  /// en: 'To share copies made in other apps, install Shizuku and keep it running. LocalSend will also ask for clipboard access and notification permission. The tutorial walks you through setup and connecting your devices.'
+  String get setupDescription =>
+      'To share copies made in other apps, install Shizuku and keep it running. LocalSend will also ask for clipboard access and notification permission. The tutorial walks you through setup and connecting your devices.';
+
+  /// en: 'Continue setup'
+  String get continueSetup => 'Continue setup';
+
+  /// en: 'Follow these steps on your Android phone. You only need to pair Shizuku once; start it again after restarting your phone.'
+  String get tutorialIntro =>
+      'Follow these steps on your Android phone. You only need to pair Shizuku once; start it again after restarting your phone.';
+
+  /// en: 'Install Shizuku'
+  String get installTitle => 'Install Shizuku';
+
+  /// en: 'Get Shizuku from its official website and open it. This build uses its wireless debugging or computer startup mode.'
+  String get installBody => 'Get Shizuku from its official website and open it. This build uses its wireless debugging or computer startup mode.';
+
+  /// en: 'Get Shizuku'
+  String get downloadShizuku => 'Get Shizuku';
+
+  /// en: 'Start Shizuku'
+  String get startTitle => 'Start Shizuku';
+
+  /// en: 'Connect to Wi-Fi. In phone Settings, enable Developer options and USB debugging, then enable Wireless debugging. In Shizuku, tap Pairing. In Wireless debugging, choose Pair device with pairing code and enter that code in the Shizuku notification. Return to Shizuku and tap Start. Check that it says it is running. Menu names may vary by phone.'
+  String get startBody =>
+      'Connect to Wi-Fi. In phone Settings, enable Developer options and USB debugging, then enable Wireless debugging. In Shizuku, tap Pairing. In Wireless debugging, choose Pair device with pairing code and enter that code in the Shizuku notification. Return to Shizuku and tap Start. Check that it says it is running. Menu names may vary by phone.';
+
+  /// en: 'Official Shizuku guide'
+  String get officialGuide => 'Official Shizuku guide';
+
+  /// en: 'Allow LocalSend access'
+  String get permissionsTitle => 'Allow LocalSend access';
+
+  /// en: 'Return to LocalSend and allow Shizuku access for LocalSend and notifications. If you want automatic screenshots, turn on Synchronize copied images and allow full photo access.'
+  String get permissionsBody =>
+      'Return to LocalSend and allow Shizuku access for LocalSend and notifications. If you want automatic screenshots, turn on Synchronize copied images and allow full photo access.';
+
+  /// en: 'Allow access'
+  String get allowAccess => 'Allow access';
+
+  /// en: 'Clipboard access is allowed. You can now connect your devices.'
+  String get accessGranted => 'Clipboard access is allowed. You can now connect your devices.';
+
+  /// en: 'Connect your devices'
+  String get pairTitle => 'Connect your devices';
+
+  /// en: 'Keep both devices on the same network. On your computer, open Clipboard sync and tap Add device. Scan its QR code with your phone camera or LocalSend. Compare the codes and confirm on both devices.'
+  String get pairBody =>
+      'Keep both devices on the same network. On your computer, open Clipboard sync and tap Add device. Scan its QR code with your phone camera or LocalSend. Compare the codes and confirm on both devices.';
+
+  /// en: 'Start sharing'
+  String get shareTitle => 'Start sharing';
+
+  /// en: 'Turn on Share clipboard on both devices. A green dot beside a device means it is connected. Copy something new on one device, then paste on the other. Enable image sharing on both devices for photos and screenshots.'
+  String get shareBody =>
+      'Turn on Share clipboard on both devices. A green dot beside a device means it is connected. Copy something new on one device, then paste on the other. Enable image sharing on both devices for photos and screenshots.';
+
+  /// en: 'Back to clipboard settings'
+  String get returnToSettings => 'Back to clipboard settings';
+
+  /// en: 'After restarting your phone, start Shizuku again. If sharing pauses, check Shizuku and that both devices are on the same network.'
+  String get restartReminder =>
+      'After restarting your phone, start Shizuku again. If sharing pauses, check Shizuku and that both devices are on the same network.';
+
+  /// en: 'Connected'
+  String get onlineDevice => 'Connected';
+
+  /// en: 'Not connected'
+  String get offlineDevice => 'Not connected';
+
+  /// en: 'Could not open the link. Try again.'
+  String get openLinkFailed => 'Could not open the link. Try again.';
 }
 
 // Path: general

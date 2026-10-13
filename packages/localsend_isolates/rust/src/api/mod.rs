@@ -1,4 +1,5 @@
 pub mod cancel;
+pub mod clipboard;
 pub mod crypto;
 pub mod discovery;
 pub mod filename;

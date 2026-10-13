@@ -9,6 +9,7 @@ import 'dart:ffi' as ffi;
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
 import 'package:localsend_isolates/rust/api/cancel.dart';
+import 'package:localsend_isolates/rust/api/clipboard.dart';
 import 'package:localsend_isolates/rust/api/crypto.dart';
 import 'package:localsend_isolates/rust/api/discovery.dart';
 import 'package:localsend_isolates/rust/api/filename.dart';
@@ -54,6 +55,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_RsCancellationTokenPtr =>
       wire._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationTokenPtr;
 
+  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_RsClipboardPairingPtr =>
+      wire._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairingPtr;
+
+  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_RsClipboardRuntimePtr =>
+      wire._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntimePtr;
+
   CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_RsDiscoveryPtr =>
       wire._rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsDiscoveryPtr;
 
@@ -91,6 +98,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RsCancellationToken dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationToken(dynamic raw);
 
   @protected
+  RsClipboardPairing dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(dynamic raw);
+
+  @protected
+  RsClipboardRuntime dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(dynamic raw);
+
+  @protected
   RsDiscovery dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsDiscovery(dynamic raw);
 
   @protected
@@ -122,6 +135,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RsCancellationToken dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationToken(dynamic raw);
+
+  @protected
+  RsClipboardPairing dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(dynamic raw);
+
+  @protected
+  RsClipboardRuntime dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(dynamic raw);
 
   @protected
   RsDiscovery dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsDiscovery(dynamic raw);
@@ -170,6 +189,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RsCancellationToken dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationToken(dynamic raw);
+
+  @protected
+  RsClipboardPairing dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(dynamic raw);
+
+  @protected
+  RsClipboardRuntime dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(dynamic raw);
 
   @protected
   RsDiscovery dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsDiscovery(dynamic raw);
@@ -269,10 +294,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RegisterDtoV2 dco_decode_box_autoadd_register_dto_v_2(dynamic raw);
 
   @protected
+  RsClipboardUpdate dco_decode_box_autoadd_rs_clipboard_update(dynamic raw);
+
+  @protected
   RsDiscoveredDevice dco_decode_box_autoadd_rs_discovered_device(dynamic raw);
 
   @protected
   RsHttpClientError dco_decode_box_autoadd_rs_http_client_error(dynamic raw);
+
+  @protected
+  RsPairingUpdate dco_decode_box_autoadd_rs_pairing_update(dynamic raw);
 
   @protected
   RTCSendFileResponse dco_decode_box_autoadd_rtc_send_file_response(dynamic raw);
@@ -344,6 +375,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
 
   @protected
+  List<RsClipboardPeer> dco_decode_list_rs_clipboard_peer(dynamic raw);
+
+  @protected
   List<RsDeviceChannel> dco_decode_list_rs_device_channel(dynamic raw);
 
   @protected
@@ -376,6 +410,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PrepareUploadResponseDto? dco_decode_opt_box_autoadd_prepare_upload_response_dto(dynamic raw);
+
+  @protected
+  RsClipboardUpdate? dco_decode_opt_box_autoadd_rs_clipboard_update(dynamic raw);
+
+  @protected
+  RsPairingUpdate? dco_decode_opt_box_autoadd_rs_pairing_update(dynamic raw);
 
   @protected
   TlsConfig? dco_decode_opt_box_autoadd_tls_config(dynamic raw);
@@ -432,6 +472,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ResultWithPublicKeyRegisterResponseDto dco_decode_result_with_public_key_register_response_dto(dynamic raw);
 
   @protected
+  RsClipboardPeer dco_decode_rs_clipboard_peer(dynamic raw);
+
+  @protected
+  RsClipboardUpdate dco_decode_rs_clipboard_update(dynamic raw);
+
+  @protected
   RsDeviceChannel dco_decode_rs_device_channel(dynamic raw);
 
   @protected
@@ -445,6 +491,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RsHttpClientError dco_decode_rs_http_client_error(dynamic raw);
+
+  @protected
+  RsPairingUpdate dco_decode_rs_pairing_update(dynamic raw);
 
   @protected
   RsServerEvent dco_decode_rs_server_event(dynamic raw);
@@ -549,6 +598,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  RsClipboardPairing sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RsClipboardRuntime sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RsDiscovery sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsDiscovery(SseDeserializer deserializer);
 
   @protected
@@ -588,6 +647,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RsCancellationToken sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationToken(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RsClipboardPairing sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RsClipboardRuntime sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(
     SseDeserializer deserializer,
   );
 
@@ -634,6 +703,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RsCancellationToken sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationToken(SseDeserializer deserializer);
+
+  @protected
+  RsClipboardPairing sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(SseDeserializer deserializer);
+
+  @protected
+  RsClipboardRuntime sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(SseDeserializer deserializer);
 
   @protected
   RsDiscovery sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsDiscovery(SseDeserializer deserializer);
@@ -733,10 +808,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RegisterDtoV2 sse_decode_box_autoadd_register_dto_v_2(SseDeserializer deserializer);
 
   @protected
+  RsClipboardUpdate sse_decode_box_autoadd_rs_clipboard_update(SseDeserializer deserializer);
+
+  @protected
   RsDiscoveredDevice sse_decode_box_autoadd_rs_discovered_device(SseDeserializer deserializer);
 
   @protected
   RsHttpClientError sse_decode_box_autoadd_rs_http_client_error(SseDeserializer deserializer);
+
+  @protected
+  RsPairingUpdate sse_decode_box_autoadd_rs_pairing_update(SseDeserializer deserializer);
 
   @protected
   RTCSendFileResponse sse_decode_box_autoadd_rtc_send_file_response(SseDeserializer deserializer);
@@ -808,6 +889,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<(String, String)> sse_decode_list_record_string_string(SseDeserializer deserializer);
 
   @protected
+  List<RsClipboardPeer> sse_decode_list_rs_clipboard_peer(SseDeserializer deserializer);
+
+  @protected
   List<RsDeviceChannel> sse_decode_list_rs_device_channel(SseDeserializer deserializer);
 
   @protected
@@ -842,6 +926,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PrepareUploadResponseDto? sse_decode_opt_box_autoadd_prepare_upload_response_dto(SseDeserializer deserializer);
+
+  @protected
+  RsClipboardUpdate? sse_decode_opt_box_autoadd_rs_clipboard_update(SseDeserializer deserializer);
+
+  @protected
+  RsPairingUpdate? sse_decode_opt_box_autoadd_rs_pairing_update(SseDeserializer deserializer);
 
   @protected
   TlsConfig? sse_decode_opt_box_autoadd_tls_config(SseDeserializer deserializer);
@@ -898,6 +988,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ResultWithPublicKeyRegisterResponseDto sse_decode_result_with_public_key_register_response_dto(SseDeserializer deserializer);
 
   @protected
+  RsClipboardPeer sse_decode_rs_clipboard_peer(SseDeserializer deserializer);
+
+  @protected
+  RsClipboardUpdate sse_decode_rs_clipboard_update(SseDeserializer deserializer);
+
+  @protected
   RsDeviceChannel sse_decode_rs_device_channel(SseDeserializer deserializer);
 
   @protected
@@ -911,6 +1007,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   RsHttpClientError sse_decode_rs_http_client_error(SseDeserializer deserializer);
+
+  @protected
+  RsPairingUpdate sse_decode_rs_pairing_update(SseDeserializer deserializer);
 
   @protected
   RsServerEvent sse_decode_rs_server_event(SseDeserializer deserializer);
@@ -1027,6 +1126,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(
+    RsClipboardPairing self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(
+    RsClipboardRuntime self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsDiscovery(RsDiscovery self, SseSerializer serializer);
 
   @protected
@@ -1077,6 +1188,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationToken(
     RsCancellationToken self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(
+    RsClipboardPairing self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(
+    RsClipboardRuntime self,
     SseSerializer serializer,
   );
 
@@ -1143,6 +1266,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     RsCancellationToken self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(RsClipboardPairing self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(RsClipboardRuntime self, SseSerializer serializer);
 
   @protected
   void sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsDiscovery(RsDiscovery self, SseSerializer serializer);
@@ -1244,10 +1373,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_register_dto_v_2(RegisterDtoV2 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_rs_clipboard_update(RsClipboardUpdate self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_rs_discovered_device(RsDiscoveredDevice self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_rs_http_client_error(RsHttpClientError self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_rs_pairing_update(RsPairingUpdate self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_rtc_send_file_response(RTCSendFileResponse self, SseSerializer serializer);
@@ -1319,6 +1454,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_record_string_string(List<(String, String)> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_rs_clipboard_peer(List<RsClipboardPeer> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_rs_device_channel(List<RsDeviceChannel> self, SseSerializer serializer);
 
   @protected
@@ -1353,6 +1491,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_prepare_upload_response_dto(PrepareUploadResponseDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_rs_clipboard_update(RsClipboardUpdate? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_rs_pairing_update(RsPairingUpdate? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_tls_config(TlsConfig? self, SseSerializer serializer);
@@ -1410,6 +1554,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_result_with_public_key_register_response_dto(ResultWithPublicKeyRegisterResponseDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_rs_clipboard_peer(RsClipboardPeer self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_rs_clipboard_update(RsClipboardUpdate self, SseSerializer serializer);
+
+  @protected
   void sse_encode_rs_device_channel(RsDeviceChannel self, SseSerializer serializer);
 
   @protected
@@ -1423,6 +1573,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_rs_http_client_error(RsHttpClientError self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_rs_pairing_update(RsPairingUpdate self, SseSerializer serializer);
 
   @protected
   void sse_encode_rs_server_event(RsServerEvent self, SseSerializer serializer);
@@ -1753,6 +1906,70 @@ class RustLibWire implements BaseWire {
       );
   late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationToken =
       _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsCancellationTokenPtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairingPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_localsend_isolates_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing',
+      );
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing =
+      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairingPtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairingPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_localsend_isolates_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing',
+      );
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairing =
+      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardPairingPtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntimePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_localsend_isolates_rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime',
+      );
+  late final _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime =
+      _rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntimePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(
+    ffi.Pointer<ffi.Void> ptr,
+  ) {
+    return _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime(
+      ptr,
+    );
+  }
+
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntimePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'frbgen_localsend_isolates_rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime',
+      );
+  late final _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntime =
+      _rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsClipboardRuntimePtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   void rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerRsDiscovery(

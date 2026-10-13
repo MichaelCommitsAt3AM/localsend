@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "org.localsend.localsend_app.debug",
+      "sha256_cert_fingerprints": [
+        "C8:F6:12:67:65:32:08:ED:73:4C:E5:1B:9E:E5:F1:68:8C:9C:41:AA:7E:CE:E7:DB:57:F0:53:08:AA:F3:CC:EF"
+      ]
+    }
+  }
+]
