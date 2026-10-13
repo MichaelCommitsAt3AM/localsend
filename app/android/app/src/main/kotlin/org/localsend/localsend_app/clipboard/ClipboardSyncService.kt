@@ -136,13 +136,24 @@ class ClipboardSyncService : Service() {
         val devices = ClipboardChannels.notificationDevices
         val counts = "${devices.connected} connected ${if (devices.connected == 1) "device" else "devices"}"
         val summary = captureIssue ?: screenshotIssue ?: counts
-        val details = if (devices.connected == 0) null else "Connected devices:\n" + devices.names.joinToString("\n")
+        val details = android.text.SpannableStringBuilder()
+        details.append(listOfNotNull(captureIssue, screenshotIssue, counts).joinToString("\n"))
+        if (devices.connected > 0) {
+            for (name in devices.names) {
+                details.append("\n")
+                val dotStart = details.length
+                details.append("\u25CF ").append(name)
+                details.setSpan(
+                    android.text.style.ForegroundColorSpan(android.graphics.Color.rgb(76, 175, 80)),
+                    dotStart, dotStart + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+        }
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1, Intent(this, ClipboardSyncService::class.java).setAction("stop"), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, "clipboard-sync")
             .setSmallIcon(android.R.drawable.ic_menu_share).setContentTitle("LocalSend clipboard sync")
-            .setContentText(summary).setStyle(Notification.BigTextStyle().bigText(
-                listOfNotNull(captureIssue, screenshotIssue, counts, details).joinToString("\n")))
+            .setContentText(summary).setStyle(Notification.BigTextStyle().bigText(details))
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
     }

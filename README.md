@@ -2,7 +2,7 @@
 
 A development fork of [LocalSend](https://github.com/localsend/localsend) with automatic clipboard sharing between explicitly paired Windows and Android devices. Regular LocalSend file and message transfers remain available.
 
-**Current scope:** Windows-Android direct LAN clipboard sync. This is a development build, not a completed production release. Linux clipboard integration, other platform adapters and an optional self-hosted relay are still pending.
+**Current scope:** Windows-Android direct LAN clipboard sync. This is a development build, not a completed production release. Clipboard synchronization will remain local-network-only; a hosted relay is out of scope. This fork will release only for Windows and Android. Linux and macOS implementation and testing are deferred indefinitely and may be reconsidered later.
 
 The badges and project links below refer to upstream LocalSend.
 
@@ -69,6 +69,7 @@ LocalSend is a cross-platform app that enables secure communication between devi
 | Image arrival notifications | Windows and Android announce successfully received clipboard images so users know when they are ready to paste. Text arrivals are silent. |
 | Android ongoing notification | Shows only connected device counts and names; paired devices that are offline are omitted. |
 | Consistent default colors | New installs use LocalSend teal on every platform and in all build types. Other color choices remain available in Settings. |
+| In-app updates | Checks this fork's GitHub Releases, verifies compatible downloads and offers a separate install action. Current release targets are Windows installers and Android APKs. Linux/macOS updater code is retained for possible future work, not offered as supported release paths. |
 
 Clipboard support is separate from upstream LocalSend's platform support:
 
@@ -76,7 +77,7 @@ Clipboard support is separate from upstream LocalSend's platform support:
 | --- | --- |
 | Windows | Implemented; tested with the custom debug build. |
 | Android 13-16 | Implemented through Shizuku's wireless-debugging/computer startup mode; physical testing performed on a Galaxy A35 running Android 16. |
-| Linux, macOS, iOS and other platforms | Clipboard adapters are not implemented in this fork yet. KDE Wayland testing is deferred. |
+| Linux, macOS, iOS and other platforms | Outside the current release scope. Linux/macOS clipboard implementation and testing are deferred; future support is undecided. |
 
 ### Clipboard Setup
 
@@ -106,10 +107,11 @@ Clipboard sharing uses its own securely stored device identity, pinned mutual TL
 - Automatic Android screenshots are recognized in `DCIM/Screenshots` and `Pictures/Screenshots` with supported screenshot names. Old screenshots are not sent when sharing starts. Custom screenshot locations are not supported yet. Ordinary saved camera photos are not automatically shared; explicitly copy them.
 - Rich text, multiple clipboard items and remote clipboard clearing are not implemented. Some Android image providers restrict access to copied images.
 - Delivery is best effort and keeps the latest value. Locked-screen capture, uninterrupted operation during sleep and long-duration reliability are not guaranteed.
-- Pairing currently saves device IP addresses; re-pair if an address changes. Internet/relay clipboard sharing and independent security review remain pending.
+- Pairing currently saves device IP addresses; re-pair if an address changes. Clipboard sharing requires direct local-network connectivity; internet/relay sharing is not planned. Independent security review remains pending.
+- GitHub update checks/downloads and the static pairing-link website use internet services independently of clipboard sync. Neither service carries clipboard contents.
 - Camera-app links use `localsend.currenta.tech`. Verified Android links currently cover the debug signing certificate; production signing requires the association setup described in the [pairing-link deployment guide](support/clipboard_sync/app_link_site/README.md).
 
-See the [development build guide](support/clipboard_sync/WINDOWS_ANDROID_DEBUG.md) for detailed behavior and testing, the [recorded results](support/clipboard_sync/DEBUG_RESULTS.md) for validation evidence, and the [implementation roadmap](support/clipboard_sync/README.md) for the remaining production, Linux and relay work.
+See the [development build guide](support/clipboard_sync/WINDOWS_ANDROID_DEBUG.md) for detailed behavior and testing, the [recorded results](support/clipboard_sync/DEBUG_RESULTS.md) for validation evidence, and the [implementation roadmap](support/clipboard_sync/README.md) for the remaining Windows/Android local-network hardening work and deferred platform scope.
 
 ### Fork Builds and Updates
 
@@ -124,7 +126,9 @@ fvm flutter build apk --debug --target-platform android-arm64
 - Windows: `app/build/windows/x64/runner/Debug/localsend_app.exe`. Keep the complete Debug directory together, including its DLLs and `data` directory.
 - Android: `app/build/app/outputs/flutter-apk/app-debug.apk`. The debug package is `org.localsend.localsend_app.debug`, with separate app settings from official LocalSend.
 
-This fork has no internal updater. Update manually with a new APK or the complete Windows bundle. The store/package-manager links below install upstream LocalSend, not this fork. Debug builds do not carry upstream release-signing guarantees.
+Use **Settings > Check for updates** to check this fork's GitHub Releases. Downloads require GitHub's SHA-256 digest and exact size verification; installation requires a separate **Open installer** action. Automatic startup checks can be turned off in Settings. The current release workflow produces Windows installers and Android APKs only. Previously added Linux/macOS updater paths are retained for potential future use and are not validated release targets.
+
+See the [updater and GitHub Actions guide](support/updater/README.md) for release asset names, signing secrets and the **Fork release draft** workflow. Linux and macOS builds are excluded from the fork release workflow; support may be reconsidered in the future. Android release APKs cannot update this separate debug package. The store/package-manager links below install upstream LocalSend, not this fork. Debug builds do not carry upstream release-signing guarantees.
 
 ## Sponsors
 

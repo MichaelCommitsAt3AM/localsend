@@ -1,7 +1,8 @@
 # Clipboard feasibility checks
 
 These tools are separate from LocalSend's production app. They do not implement
-synchronization, transport, pairing, or a relay.
+synchronization, transport, or pairing. Clipboard synchronization is planned only
+for direct local-network connections; no hosted relay is planned.
 
 ## Android listener and service test
 

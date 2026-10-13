@@ -13,6 +13,7 @@ import 'package:localsend_app/pages/home_page_controller.dart';
 import 'package:localsend_app/pages/whats_new_page.dart';
 import 'package:localsend_app/provider/animation_provider.dart';
 import 'package:localsend_app/provider/app_arguments_provider.dart';
+import 'package:localsend_app/provider/app_update_provider.dart';
 import 'package:localsend_app/provider/clipboard_sync_provider.dart';
 import 'package:localsend_app/provider/device_info_provider.dart';
 import 'package:localsend_app/provider/network/nearby_devices_provider.dart';
@@ -242,6 +243,9 @@ Future<void> postInit(BuildContext context, Ref ref, bool appStart) async {
   }
 
   if (appStart) {
+    // ignore: unawaited_futures
+    ref.notifier(appUpdateProvider).checkForUpdates();
+
     if (defaultTargetPlatform == TargetPlatform.macOS) {
       // handle dropped files
       pendingFilesStream.listen((files) async {

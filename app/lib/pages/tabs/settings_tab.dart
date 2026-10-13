@@ -9,6 +9,7 @@ import 'package:localsend_app/pages/donation/donation_page.dart';
 import 'package:localsend_app/pages/settings/clipboard_sync_page.dart';
 import 'package:localsend_app/pages/settings/network_interfaces_page.dart';
 import 'package:localsend_app/pages/tabs/settings_tab_controller.dart';
+import 'package:localsend_app/provider/app_update_provider.dart';
 import 'package:localsend_app/provider/network/server/server_provider.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
 import 'package:localsend_app/provider/version_provider.dart';
@@ -19,6 +20,7 @@ import 'package:localsend_app/util/native/device_info_helper.dart';
 import 'package:localsend_app/util/native/macos_channel.dart';
 import 'package:localsend_app/util/native/pick_directory_path.dart';
 import 'package:localsend_app/util/native/platform_check.dart';
+import 'package:localsend_app/util/ui/snackbar.dart';
 import 'package:localsend_app/widget/custom_dropdown_button.dart';
 import 'package:localsend_app/widget/dialogs/encryption_disabled_notice.dart';
 import 'package:localsend_app/widget/dialogs/pin_dialog.dart';
@@ -52,6 +54,16 @@ class SettingsTab extends StatelessWidget {
               child: Text(t.settingsTab.title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
             ),
             const SizedBox(height: 30),
+            if (kDebugMode)
+              ListTile(
+                title: const Text('[Debug] Show Update Banner'),
+                subtitle: const Text('Simulate a pending update to test the top banner'),
+                leading: const Icon(Icons.bug_report, color: Colors.orange),
+                trailing: const Icon(Icons.play_arrow),
+                onTap: () {
+                  ref.notifier(appUpdateProvider).triggerDebugUpdateBanner();
+                },
+              ),
             if (defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.android)
               ListTile(
                 title: Text(t.clipboardSync.title),
@@ -571,6 +583,29 @@ class SettingsTab extends StatelessWidget {
                       );
                     },
                   ),
+                _ButtonEntry(
+                  label: t.appUpdate.checkUpdates,
+                  buttonLabel: context.watch(appUpdateProvider).stage == UpdateStage.checking ? t.appUpdate.checking : t.appUpdate.checkUpdates,
+                  onTap: () async {
+                    await ref.notifier(appUpdateProvider).checkForUpdates(isManual: true);
+                    final state = ref.read(appUpdateProvider);
+                    if (context.mounted && state.checkResult == UpdateCheckResult.current) {
+                      final version = ref.read(versionProvider).data?.version ?? '';
+                      context.showSnackBar(t.appUpdate.upToDate(version: version));
+                    } else if (context.mounted && state.checkResult == UpdateCheckResult.noRelease) {
+                      context.showSnackBar(t.appUpdate.noRelease);
+                    } else if (context.mounted && state.checkResult == UpdateCheckResult.failed) {
+                      context.showSnackBar(t.appUpdate.checkFailed);
+                    }
+                  },
+                ),
+                _BooleanEntry(
+                  label: t.appUpdate.autoCheck,
+                  value: context.watch(appUpdateProvider).autoCheck,
+                  onChanged: (b) async {
+                    await ref.notifier(appUpdateProvider).setAutoCheck(b);
+                  },
+                ),
               ],
             ),
             Row(

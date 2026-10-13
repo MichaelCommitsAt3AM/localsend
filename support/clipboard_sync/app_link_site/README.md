@@ -31,7 +31,9 @@ Pairing credentials live only in the URL fragment, which the browser does not
 send to the server. The fallback script validates bounds/expiry, removes the
 fragment from browser history and opens the installed app only on a user tap.
 It never sends invitation contents to Cloudflare. Clipboard traffic continues
-directly between the paired devices on the LAN.
+directly between the paired devices on the LAN. This static site remains useful
+for camera-app pairing links and Android domain verification; it is not a
+clipboard backend. Canceling the hosted relay does not require removing it.
 
 After deploying, ask Android to reverify and inspect the actual result:
 

@@ -1,7 +1,9 @@
 # Windows–Android direct LAN development build
 
 This is the first integrated development slice, not the complete production
-feature described in the roadmap. Linux and the hosted relay are not implemented.
+feature described in the roadmap. Clipboard sync is local-network-only, with no
+hosted relay planned. Only Windows and Android releases are planned for now;
+Linux and macOS clipboard implementation and testing are deferred indefinitely.
 
 ## Implemented path
 
@@ -156,7 +158,7 @@ there is no automatic quality reduction, file sync, or clipboard history.
 - A failed OS write is visible in status; application-level receipt/retry and
   acknowledgement semantics need further hardening before a production release.
 - Android connected-device service is for explicit local paired-device exchange.
-  This does not establish hosted-mode service eligibility or store policy approval.
+  Store policy approval has not been established.
   No boot-start promise, wake lock, battery exemption or Doze bypass is included.
 - Shizuku loss is surfaced; the active ordinary service waits for a new Shizuku
   Binder and rebinds the helper. Unsupported signatures fail closed. Revocation

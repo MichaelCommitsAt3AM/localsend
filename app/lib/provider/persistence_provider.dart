@@ -96,6 +96,8 @@ const _createChecksums = 'ls_create_checksums';
 const _verifyChecksums = 'ls_verify_checksums';
 const _advancedSettingsKey = 'ls_advanced_settings';
 const _whatsNewKey = 'ls_whats_new';
+const _autoCheckUpdates = 'ls_auto_check_updates';
+const _dismissedUpdateTag = 'ls_dismissed_update_tag';
 
 final persistenceProvider = Provider<PersistenceService>((ref) {
   throw Exception('persistenceProvider not initialized');
@@ -595,6 +597,26 @@ class PersistenceService {
 
   Future<void> setWhatsNew(String version) async {
     await _prefs.setString(_whatsNewKey, version);
+  }
+
+  bool isAutoCheckUpdates() {
+    return _prefs.getBool(_autoCheckUpdates) ?? true;
+  }
+
+  Future<void> setAutoCheckUpdates(bool value) async {
+    await _prefs.setBool(_autoCheckUpdates, value);
+  }
+
+  String? getDismissedUpdateTag() {
+    return _prefs.getString(_dismissedUpdateTag);
+  }
+
+  Future<void> setDismissedUpdateTag(String? tag) async {
+    if (tag == null) {
+      await _prefs.remove(_dismissedUpdateTag);
+    } else {
+      await _prefs.setString(_dismissedUpdateTag, tag);
+    }
   }
 
   Future<void> clear() async {

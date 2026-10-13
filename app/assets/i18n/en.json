@@ -691,5 +691,29 @@
     "sActionUseCameraHint": "use camera",
     "sNameDurationLabel": "duration",
     "sUnitAssetCountLabel": "count"
+  },
+  "appUpdate": {
+    "title": "Update Available",
+    "updateAvailable": "A new version of LocalSend is available: {version}",
+    "download": "Download",
+    "downloading": "Downloading update ({percent}%)…",
+    "downloadFailed": "Failed to download update",
+    "installing": "Starting installation…",
+    "installFailed": "Failed to launch installer",
+    "openBrowser": "Open in browser",
+    "retry": "Retry",
+    "dismiss": "Dismiss",
+    "checkUpdates": "Check for updates",
+    "checking": "Checking for updates…",
+    "upToDate": "You have the latest version ({version})",
+    "autoCheck": "Automatically check for updates",
+    "checkFailed": "Could not check for updates. Check your connection and try again.",
+    "noRelease": "No published release was found, or the repository is unavailable.",
+    "verificationFailed": "Update download or verification failed. Try again or open the release page.",
+    "verifiedReady": "Update verified and ready to install",
+    "openInstaller": "Open installer",
+    "installerOpened": "Installer opened. Finish installation there; on macOS, quit LocalSend and replace it in Applications.",
+    "restartRequired": "Update applied. Restart LocalSend to use the new version.",
+    "openFailed": "Could not open the release page."
   }
 }

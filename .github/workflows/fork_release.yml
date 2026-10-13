@@ -1,0 +1,169 @@
+name: Fork release draft
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    if: github.repository == 'MichaelCommitsAt3AM/localsend'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      flutter: ${{ steps.meta.outputs.flutter }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: meta
+        name: Validate release versions
+        shell: python
+        run: |
+          import json, os, re
+          from pathlib import Path
+          version = re.search(r'^version: (\d+\.\d+\.\d+)\+(\d+)$', Path('app/pubspec.yaml').read_text(), re.M)
+          if version is None: raise SystemExit('Use a stable x.y.z+build version')
+          base = version[1]
+          if int(version[2]) < 1: raise SystemExit('Android version code must be positive')
+          if os.environ['GITHUB_REF'].startswith('refs/tags/') and os.environ['GITHUB_REF_NAME'] != 'v' + base:
+            raise SystemExit('Tag must match pubspec version: v' + base)
+          cli = Path('cli/Cargo.toml').read_text()
+          inno = Path('support/scripts/compile_windows_exe-inno.iss').read_text()
+          if 'version = "' + base + '"' not in cli or '#define MyAppVersion "' + base + '"' not in inno:
+            raise SystemExit('CLI, pubspec and upstream installer versions must match')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+            output.write('version=' + base + '\ntag=v' + base + '\nflutter=' + json.loads(Path('.fvmrc').read_text())['flutter'] + '\n')
+
+  windows:
+    needs: metadata
+    runs-on: windows-latest
+    env:
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ needs.metadata.outputs.flutter }}
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Inno Setup 6
+        run: choco install innosetup --version=6.7.3 --yes --no-progress
+      - name: Prepare build-time MSIX helper
+        shell: pwsh
+        run: |
+          $makepri = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\10.*\x64\makepri.exe' | Select-Object -Last 1
+          & $makepri.FullName new /pr support/build/msix/content /cf support/build/msix/priconfig.xml /mn support/build/msix/content/AppxManifest.xml /of support/build/msix/content/resources.pri /o
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & 'C:\Program Files (x86)\Windows Kits\10\App Certification Kit\makeappx.exe' pack /o /d support/build/msix/content /nv /p app/windows/localsend_msix_helper.msix
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build release bundle
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build windows --release
+      - name: Build unsigned fork installer
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          $payload = Join-Path $env:RUNNER_TEMP 'fork-installer-payload'
+          $result = Join-Path $env:RUNNER_TEMP 'fork-installer-result'
+          New-Item -ItemType Directory -Path $payload,$result -Force | Out-Null
+          Copy-Item -Path 'app/build/windows/x64/runner/Release/*' -Destination $payload -Recurse
+          Copy-Item -Path 'support/build/windows/x64/*' -Destination $payload
+          Copy-Item -LiteralPath 'app/assets/packaging/logo.ico' -Destination $payload
+          $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) { throw 'Inno Setup 6 is required on the runner' }
+          & $compiler "/DMyAppVersion=$env:VERSION" "/DPayloadDir=$payload" "/DResultDir=$result" support/scripts/fork_windows_installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v6
+        with:
+          name: fork-windows
+          path: ${{ runner.temp }}/fork-installer-result/*.exe
+          if-no-files-found: error
+
+  android:
+    needs: metadata
+    runs-on: ubuntu-latest
+    env:
+      CARGO_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ needs.metadata.outputs.flutter }}
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Configure permanent Android release signing
+        shell: python
+        env:
+          KEYSTORE: ${{ secrets.FORK_ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.FORK_ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.FORK_ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.FORK_ANDROID_KEY_ALIAS }}
+        run: |
+          import base64, os
+          from pathlib import Path
+          required = ['KEYSTORE', 'STORE_PASSWORD', 'KEY_PASSWORD', 'KEY_ALIAS']
+          if not all(os.environ.get(k) for k in required): raise SystemExit('Configure the four FORK_ANDROID signing secrets')
+          Path('app/android/app/fork-release.jks').write_bytes(base64.b64decode(os.environ['KEYSTORE'], validate=True))
+          def prop(value):
+            encoded = value.encode('utf-16-be')
+            return ''.join('\\u%04x' % int.from_bytes(encoded[i:i+2], 'big') for i in range(0, len(encoded), 2))
+          Path('app/android/key.properties').write_text('storeFile=fork-release.jks\nstorePassword=' + prop(os.environ['STORE_PASSWORD']) + '\nkeyPassword=' + prop(os.environ['KEY_PASSWORD']) + '\nkeyAlias=' + prop(os.environ['KEY_ALIAS']) + '\n')
+      - name: Build universal APK
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build apk --release
+      - name: Stage artifact
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          mkdir -p fork-dist
+          cp app/build/app/outputs/flutter-apk/app-release.apk "fork-dist/LocalSend-$VERSION-android-universal.apk"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: fork-android
+          path: fork-dist/*.apk
+          if-no-files-found: error
+
+  draft:
+    if: always() && needs.metadata.result == 'success' && needs.windows.result == 'success' && needs.android.result == 'success'
+    needs: [metadata, windows, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: fork-*
+          path: fork-dist
+          merge-multiple: true
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            test "$(gh release view "$TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)" = true
+          else
+            gh release create "$TAG" --repo "$REPOSITORY" --draft --title "LocalSend AutoSync $TAG" --notes 'Development fork. Review platform testing and signing before publishing.' --target "$GITHUB_SHA"
+          fi
+          gh release upload "$TAG" fork-dist/* --repo "$REPOSITORY" --clobber
+          # Require GitHub's SHA-256 metadata before the draft can be considered ready.
+          gh api "repos/$REPOSITORY/releases/tags/$TAG" > release.json
+          python3 -c 'import json,re; assets=json.load(open("release.json"))["assets"]; assert assets; assert all(0<a["size"]<=1073741824 and re.fullmatch("sha256:[a-f0-9]{64}",a.get("digest") or "") for a in assets), "Release assets must have GitHub SHA-256 digests"'

@@ -68,9 +68,9 @@ jobs:
       - name: Sign app binaries (Azure Trusted Signing)
         uses: azure/trusted-signing-action@v2
         with:
-          endpoint: https://neu.codesigning.azure.net/
-          trusted-signing-account-name: tienisto
-          certificate-profile-name: localsend
+          endpoint: ${{ vars.WINDOWS_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.WINDOWS_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.WINDOWS_SIGNING_PROFILE }}
           files-folder: ${{ github.workspace }}\app\build\windows\x64\runner\Release
           files-folder-filter: exe,dll
           file-digest: SHA256

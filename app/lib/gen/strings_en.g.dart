@@ -74,6 +74,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
   late final Translations$tray$en tray = Translations$tray$en.internal(_root);
   late final Translations$web$en web = Translations$web$en.internal(_root);
   late final Translations$assetPicker$en assetPicker = Translations$assetPicker$en.internal(_root);
+  late final Translations$appUpdate$en appUpdate = Translations$appUpdate$en.internal(_root);
 }
 
 // Path: clipboardSync
@@ -1315,6 +1316,81 @@ class Translations$assetPicker$en {
 
   /// en: 'count'
   String get sUnitAssetCountLabel => 'count';
+}
+
+// Path: appUpdate
+class Translations$appUpdate$en {
+  Translations$appUpdate$en.internal(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+
+  /// en: 'Update Available'
+  String get title => 'Update Available';
+
+  /// en: 'A new version of LocalSend is available: {version}'
+  String updateAvailable({required Object version}) => 'A new version of LocalSend is available: ${version}';
+
+  /// en: 'Download'
+  String get download => 'Download';
+
+  /// en: 'Downloading update ({percent}%)…'
+  String downloading({required Object percent}) => 'Downloading update (${percent}%)…';
+
+  /// en: 'Failed to download update'
+  String get downloadFailed => 'Failed to download update';
+
+  /// en: 'Starting installation…'
+  String get installing => 'Starting installation…';
+
+  /// en: 'Failed to launch installer'
+  String get installFailed => 'Failed to launch installer';
+
+  /// en: 'Open in browser'
+  String get openBrowser => 'Open in browser';
+
+  /// en: 'Retry'
+  String get retry => 'Retry';
+
+  /// en: 'Dismiss'
+  String get dismiss => 'Dismiss';
+
+  /// en: 'Check for updates'
+  String get checkUpdates => 'Check for updates';
+
+  /// en: 'Checking for updates…'
+  String get checking => 'Checking for updates…';
+
+  /// en: 'You have the latest version ({version})'
+  String upToDate({required Object version}) => 'You have the latest version (${version})';
+
+  /// en: 'Automatically check for updates'
+  String get autoCheck => 'Automatically check for updates';
+
+  /// en: 'Could not check for updates. Check your connection and try again.'
+  String get checkFailed => 'Could not check for updates. Check your connection and try again.';
+
+  /// en: 'No published release was found, or the repository is unavailable.'
+  String get noRelease => 'No published release was found, or the repository is unavailable.';
+
+  /// en: 'Update download or verification failed. Try again or open the release page.'
+  String get verificationFailed => 'Update download or verification failed. Try again or open the release page.';
+
+  /// en: 'Update verified and ready to install'
+  String get verifiedReady => 'Update verified and ready to install';
+
+  /// en: 'Open installer'
+  String get openInstaller => 'Open installer';
+
+  /// en: 'Installer opened. Finish installation there; on macOS, quit LocalSend and replace it in Applications.'
+  String get installerOpened => 'Installer opened. Finish installation there; on macOS, quit LocalSend and replace it in Applications.';
+
+  /// en: 'Update applied. Restart LocalSend to use the new version.'
+  String get restartRequired => 'Update applied. Restart LocalSend to use the new version.';
+
+  /// en: 'Could not open the release page.'
+  String get openFailed => 'Could not open the release page.';
 }
 
 // Path: receiveTab.infoBox

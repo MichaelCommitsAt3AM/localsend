@@ -40,6 +40,7 @@ class MainActivity : FlutterActivity() {
     override fun provideFlutterEngine(context: Context): FlutterEngine? = FlutterEngineCache.getInstance().get("localsend-main")
     override fun shouldDestroyEngineWithHost(): Boolean = !ClipboardChannels.retainingEngine
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        AppUpdateChannel.detach(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler(null)
         ClipboardChannels.detach(this)
         if (!ClipboardChannels.retainingEngine) FlutterEngineCache.getInstance().remove("localsend-main")
@@ -93,6 +94,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        AppUpdateChannel.attach(flutterEngine, this)
         FlutterEngineCache.getInstance().put("localsend-main", flutterEngine)
         ClipboardChannels.attach(flutterEngine, this)
         ClipboardPairingLinks.attach(flutterEngine)

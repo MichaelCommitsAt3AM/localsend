@@ -1,7 +1,9 @@
 # Integrated Windows and Android debug validation
 
 Recorded 2026-10-13. This record covers the direct LAN development slice;
-it does not establish production readiness or relay/Linux support.
+it does not establish production readiness or Linux/macOS clipboard support.
+Clipboard synchronization is local-network-only; hosted relay plans were canceled
+on 2026-10-13. Existing validation records below remain historical evidence.
 
 ## Automated checks
 
