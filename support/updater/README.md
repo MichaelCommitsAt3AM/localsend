@@ -45,8 +45,9 @@ This fork starts at `1.0.0+65` in `app/pubspec.yaml`, independently of upstream'
 version sequence. Use `v1.0.0` for its first release tag. Increase the public
 semantic version and the numeric build code for each published release; never
 reset or reuse the Android version code. For example, `1.0.1+66` is a bug-fix
-release and `1.1.0+67` can introduce new features. Keep the CLI and Inno installer
-versions synchronized with the public version.
+release and `1.1.0+67` can introduce new features. Keep the CLI, Inno installer and AppImage recipe
+versions synchronized with the public version; the MSIX helper uses that version
+with a fourth `.0` component, as checked by repository CI.
 
 At the owner's request, the release Android application ID remains
 `org.localsend.localsend_app`; debug builds use `org.localsend.localsend_app.debug`.
