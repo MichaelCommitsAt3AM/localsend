@@ -18,6 +18,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.FlutterEngineCache
 import org.localsend.localsend_app.clipboard.ClipboardChannels
 import org.localsend.localsend_app.clipboard.ClipboardPairingLinks
+import org.localsend.localsend_app.clipboard.ClipboardSyncService
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.text.SimpleDateFormat
@@ -37,6 +38,13 @@ private const val PERMISSION_ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_L
 private const val API_LEVEL_ANDROID_17 = 37
 
 class MainActivity : FlutterActivity() {
+    override fun onResume() {
+        super.onResume()
+        ClipboardSyncService.instance?.let {
+            it.refreshCaptureStatus()
+            it.refreshScreenshotAccess()
+        }
+    }
     override fun provideFlutterEngine(context: Context): FlutterEngine? = FlutterEngineCache.getInstance().get("localsend-main")
     override fun shouldDestroyEngineWithHost(): Boolean = !ClipboardChannels.retainingEngine
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {

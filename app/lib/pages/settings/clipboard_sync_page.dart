@@ -211,6 +211,7 @@ class ClipboardSyncPage extends StatelessWidget {
       !{
         'Disabled',
         'Starting',
+        'Starting Android clipboard listener',
         'Connected',
         'Waiting for paired devices',
         'Device paired',

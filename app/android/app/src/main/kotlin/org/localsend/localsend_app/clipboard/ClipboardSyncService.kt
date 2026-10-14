@@ -16,7 +16,12 @@ data class ClipboardNotificationDevices(val names: List<String>, val connected: 
 
 /** Ordinary app-UID owner; only the separate shell helper reads privileged clips. */
 class ClipboardSyncService : Service() {
-    companion object { var instance: ClipboardSyncService? = null; private set }
+    companion object {
+        var instance: ClipboardSyncService? = null; private set
+        private const val STARTING = "Starting Android clipboard listener"
+        private const val RECONNECTING = "Android copies paused: clipboard helper reconnecting"
+        private const val SHIZUKU_STOPPED = "Android copies paused: start Shizuku to restore sharing"
+    }
     private val main = Handler(Looper.getMainLooper())
     private val owner = Binder()
     private var helper: IClipboardProbe? = null
@@ -34,20 +39,38 @@ class ClipboardSyncService : Service() {
     private val imageDescriptors = ConcurrentHashMap.newKeySet<ParcelFileDescriptor>()
     private val pendingImageWrites = mutableSetOf<(Long?, String?) -> Unit>()
     private val stopCallbacks = mutableListOf<() -> Unit>()
-    private var captureIssue: String? = "Starting Android clipboard listener"
+    private var captureIssue: String? = STARTING
+    private val bindingTimeout: Runnable = Runnable {
+        if (!active || !bound || helper != null) return@Runnable
+        // A bind request is not a connected helper. Release a stalled request
+        // before retrying, otherwise bound=true prevents recovery forever.
+        try { Shizuku.unbindUserService(args, connection, false) } catch (_: Exception) {}
+        bound = false
+        setCaptureIssue(RECONNECTING)
+        bindHelper()
+    }
     private val remoteToken = java.util.UUID.randomUUID().toString()
     private val expireCapture = Runnable { captured = null; capturedImage = null }
     var sequence = 0L; private set
 
     private val dead = Shizuku.OnBinderDeadListener { main.post {
+        if (!active) return@post
+        // Binder callbacks are queued on the main thread; a new binder may
+        // already have arrived by the time an old death callback is processed.
+        if (Shizuku.pingBinder() && helper?.asBinder()?.isBinderAlive == true) {
+            refreshCaptureStatus(); return@post
+        }
+        main.removeCallbacks(bindingTimeout)
         helper = null; bound = false; generation++; captured = null; capturedImage = null
         ClipboardChannels.emit("changed")
-        setCaptureIssue("Android copies paused: start Shizuku to restore sharing")
+        setCaptureIssue(SHIZUKU_STOPPED)
+        if (Shizuku.pingBinder()) bindHelper()
     } }
-    private val received = Shizuku.OnBinderReceivedListener { main.post { bindHelper() } }
-    private val connection = object : ServiceConnection {
+    private val received = Shizuku.OnBinderReceivedListener { main.post { refreshCaptureStatus() } }
+    private val connection: ServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             if (!active || !bound) return
+            main.removeCallbacks(bindingTimeout)
             val current = ++generation
             helper = IClipboardProbe.Stub.asInterface(binder)
             try {
@@ -104,9 +127,14 @@ class ClipboardSyncService : Service() {
             }
         }
         override fun onServiceDisconnected(name: ComponentName) {
+            if (!active) return
+            if (Shizuku.pingBinder() && helper?.asBinder()?.isBinderAlive == true) {
+                refreshCaptureStatus(); return
+            }
+            main.removeCallbacks(bindingTimeout)
             helper = null; bound = false; generation++; captured = null; capturedImage = null
             ClipboardChannels.emit("changed")
-            setCaptureIssue("Android copies paused: clipboard helper reconnecting")
+            setCaptureIssue(RECONNECTING)
             if (active) main.postDelayed({ bindHelper() }, 1000)
         }
     }
@@ -127,7 +155,7 @@ class ClipboardSyncService : Service() {
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= 34) startForeground(4501, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         else startForeground(4501, notification)
-        active = true; bindHelper()
+        active = true; refreshCaptureStatus()
         refreshScreenshotAccess()
         return START_NOT_STICKY
     }
@@ -168,16 +196,41 @@ class ClipboardSyncService : Service() {
         ClipboardChannels.emit(if (issue == null) "captureReady" else "captureUnavailable", issue)
     }
 
+    /** Replay current health when the Activity/event stream reconnects. */
+    fun refreshCaptureStatus() {
+        if (!active) return
+        if (Shizuku.pingBinder() && bound && helper?.asBinder()?.isBinderAlive == true) {
+            // Only clear connection warnings. A real clipboard access denial
+            // still needs a successful capture before it can be cleared.
+            if (captureIssue in listOf(STARTING, RECONNECTING, SHIZUKU_STOPPED)) captureIssue = null
+        } else {
+            if (helper != null) {
+                helper = null; bound = false; generation++
+                captured = null; capturedImage = null
+                ClipboardChannels.emit("changed")
+            }
+            bindHelper()
+        }
+        updateNotification()
+        ClipboardChannels.emit(if (captureIssue == null) "captureReady" else "captureUnavailable", captureIssue)
+        ClipboardChannels.emit(if (screenshotIssue == null) "screenshotReady" else "screenshotUnavailable", screenshotIssue)
+    }
+
     private fun bindHelper() {
         if (!active || bound) return
         if (!Shizuku.pingBinder()) {
-            setCaptureIssue("Android copies paused: start Shizuku to restore sharing")
+            setCaptureIssue(SHIZUKU_STOPPED)
             return
         }
         if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
             ClipboardChannels.emit("fatal", "Shizuku permission is required"); stopSelf(); return
         }
-        try { bound = true; Shizuku.bindUserService(args, connection) }
+        try {
+            setCaptureIssue(STARTING)
+            bound = true
+            Shizuku.bindUserService(args, connection)
+            main.postDelayed(bindingTimeout, 5000)
+        }
         catch (_: Exception) { bound = false; ClipboardChannels.emit("fatal", "Shizuku helper binding failed"); stopSelf() }
     }
 

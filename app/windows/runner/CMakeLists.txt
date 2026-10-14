@@ -10,6 +10,7 @@ add_executable(${BINARY_NAME} WIN32
   "flutter_window.cpp"
   "clipboard_bridge.cpp"
   "clipboard_images.cpp"
+  "clipboard_notifications.cpp"
   "clipboard_secrets.cpp"
   "main.cpp"
   "utils.cpp"
@@ -43,7 +44,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
-target_link_libraries(${BINARY_NAME} PRIVATE "crypt32.lib" "shell32.lib" "ole32.lib" "windowscodecs.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "crypt32.lib" "shell32.lib" "ole32.lib" "oleaut32.lib" "windowscodecs.lib" "advapi32.lib")
 # C++/WinRT (winrt_ext.cpp): newer Windows SDKs require linking the WinRT
 # activation functions (RoGetActivationFactory etc.) explicitly.
 target_link_libraries(${BINARY_NAME} PRIVATE "runtimeobject.lib")

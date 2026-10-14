@@ -1,13 +1,13 @@
 #include "clipboard_bridge.h"
 #include "clipboard_secrets.h"
 #include "clipboard_images.h"
+#include "clipboard_notifications.h"
 #include <flutter/standard_method_codec.h>
 #include <flutter/event_stream_handler_functions.h>
 #include <cstring>
 #include <string>
 #include <random>
 #include <stdexcept>
-#include <shellapi.h>
 
 namespace {
 using Value = flutter::EncodableValue;
@@ -28,17 +28,6 @@ std::wstring ArrivalText(const Map* args, const char* key, size_t limit) {
   if (wide.size() > limit) wide.resize(limit);
   if (!wide.empty() && wide.back() >= 0xd800 && wide.back() <= 0xdbff) wide.pop_back();
   return wide;
-}
-void NotifyImageArrival(HWND window, const std::wstring& title, const std::wstring& body) noexcept {
-  if (title.empty() || body.empty()) return;
-  // Reuse tray_manager's existing root-window icon (uID=1); do not add a second icon.
-  NOTIFYICONDATAW notification{};
-  notification.cbSize = sizeof(notification); notification.hWnd = window; notification.uID = 1;
-  notification.uFlags = NIF_INFO;
-  notification.dwInfoFlags = NIIF_INFO | NIIF_NOSOUND | NIIF_RESPECT_QUIET_TIME;
-  wcsncpy_s(notification.szInfoTitle, title.c_str(), _TRUNCATE);
-  wcsncpy_s(notification.szInfo, body.c_str(), _TRUNCATE);
-  Shell_NotifyIconW(NIM_MODIFY, &notification); // Best effort; OS notification settings remain authoritative.
 }
 
 class ClipboardLock {
@@ -210,7 +199,7 @@ ClipboardBridge::ClipboardBridge(HWND window, flutter::BinaryMessenger* messenge
             if (!png_ok) GlobalFree(png_memory); if (!dib_ok) GlobalFree(dib_memory);
             if (png_ok || dib_ok) MarkRemote();
             if (!png_ok && !dib_ok) { pending->Error("WRITE_FAILED", "Clipboard image write failed"); return; }
-            NotifyImageArrival(window_, arrival_title, arrival_body);
+            NotifyClipboardImageArrival(arrival_title, arrival_body);
             pending->Success(Value(static_cast<int64_t>(GetClipboardSequenceNumber())));
           };
         } catch (...) { return [pending] { pending->Error("INVALID_IMAGE", "Clipboard image invalid or oversized"); }; }

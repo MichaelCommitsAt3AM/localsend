@@ -318,6 +318,40 @@ void main() {
     });
   }
 
+  testWidgets('Android listener startup does not show a sharing failure for a connected peer', (tester) async {
+    final container = RefenaContainer(
+      overrides: [
+        clipboardSyncProvider.overrideWithNotifier(
+          (_) => _Controller(
+            ClipboardSyncState(
+              ready: true,
+              enabled: true,
+              running: true,
+              connected: 1,
+              connectedPeers: {'A' * 64},
+              status: 'Starting Android clipboard listener',
+              peers: [ClipboardPeer(fingerprint: 'A' * 64, address: '192.0.2.1', name: 'PC')],
+            ),
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      RefenaScope.withContainer(
+        container: container,
+        child: MaterialApp(
+          theme: ThemeData(platform: TargetPlatform.android),
+          home: const ClipboardSyncPage(),
+        ),
+      ),
+    );
+    expect(find.text(t.clipboardSync.needsAttention), findsNothing);
+    expect(find.text(t.clipboardSync.connectionHelp), findsNothing);
+    expect(find.byTooltip(t.clipboardSync.onlineDevice), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    container.disposeContainer();
+  });
+
   testWidgets('configuration failure shows understandable guidance instead of appearing as an unexplained disabled page', (tester) async {
     final container = RefenaContainer(
       overrides: [

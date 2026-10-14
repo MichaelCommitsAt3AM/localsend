@@ -32,7 +32,10 @@ object ClipboardChannels {
         val application = host.applicationContext
         EventChannel(engine.dartExecutor.binaryMessenger, "org.localsend.localsend_app/clipboard_events")
             .setStreamHandler(object : EventChannel.StreamHandler {
-                override fun onListen(arguments: Any?, events: EventChannel.EventSink) { sink = events }
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                    sink = events
+                    ClipboardSyncService.instance?.refreshCaptureStatus()
+                }
                 override fun onCancel(arguments: Any?) { sink = null }
             })
         MethodChannel(engine.dartExecutor.binaryMessenger, "org.localsend.localsend_app/clipboard")

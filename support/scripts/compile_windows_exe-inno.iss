@@ -98,6 +98,11 @@ Source: "{#PayloadDir}\{#MyAppMsixHelper}"; DestDir: "{app}"; Flags: ignoreversi
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}";
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
+[Registry]
+; Runtime registers the per-user toast identity and click-to-open protocol.
+Root: HKCU; Subkey: "Software\Classes\AppUserModelId\LocalSend.ClipboardSync"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\localsend-clipboard"; Flags: uninsdeletekey
+
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 #ifndef SkipMsixHelper
