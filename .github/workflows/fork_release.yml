@@ -200,6 +200,8 @@ jobs:
         run: |
           flutter pub get
           flutter build apk --release --target-platform android-arm64 --split-per-abi
+      - name: Verify Shizuku helper survives release optimization
+        run: python3 support/clipboard_sync/tests/verify_android_helper.py app/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
       - name: Stage artifact
         env:
           VERSION: ${{ needs.metadata.outputs.version }}

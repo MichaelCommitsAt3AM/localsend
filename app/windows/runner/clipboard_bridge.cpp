@@ -252,6 +252,9 @@ ClipboardBridge::ClipboardBridge(HWND window, flutter::BinaryMessenger* messenge
         *value = 1; GlobalUnlock(flag);
         if (!exclude || !SetClipboardData(exclude, flag)) GlobalFree(flag);
       } else if (flag) GlobalFree(flag);
+#ifdef _DEBUG
+      NotifyClipboardImageArrival(L"LocalSend text received", L"Copied text is ready for pasting.");
+#endif
       result->Success(Value(static_cast<int64_t>(GetClipboardSequenceNumber())));
     } else { result->NotImplemented(); }
   });

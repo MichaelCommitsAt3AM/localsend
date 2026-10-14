@@ -142,7 +142,7 @@ class ClipboardSyncService : Service() {
     override fun onCreate() {
         super.onCreate(); instance = this
         args = Shizuku.UserServiceArgs(ComponentName(this, ClipboardUserService::class.java))
-            .tag("localsend-clipboard").daemon(false).processNameSuffix("clipboard").version(3)
+            .tag("localsend-clipboard").daemon(false).processNameSuffix("clipboard").version(4)
         File(cacheDir, "clipboard_images").listFiles()?.forEach { it.delete() }
         Shizuku.addBinderDeadListener(dead)
         Shizuku.addBinderReceivedListenerSticky(received)
@@ -226,7 +226,9 @@ class ClipboardSyncService : Service() {
             ClipboardChannels.emit("fatal", "Shizuku permission is required"); stopSelf(); return
         }
         try {
-            setCaptureIssue(STARTING)
+            // Retain a retry warning after a stalled bind instead of presenting
+            // every retry as a healthy initial startup.
+            if (captureIssue != RECONNECTING) setCaptureIssue(STARTING)
             bound = true
             Shizuku.bindUserService(args, connection)
             main.postDelayed(bindingTimeout, 5000)
