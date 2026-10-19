@@ -171,21 +171,22 @@ class StartLegacyScan extends AsyncReduxAction<NearbyDevicesService, NearbyDevic
 
     dispatch(_SetRunningIpsAction({...state.runningIps, localIp}));
 
-    // The found devices arrive on the [StartDiscoveryListener] stream;
-    // this stream only signals when the scan is finished.
-    await external(notifier._isolateController)
-        .dispatchTakeResult(
-          IsolateDiscoverySubnetScanAction(
-            networkInterface: localIp,
-            port: port,
-            https: https,
-          ),
-        )
-        .drain<void>();
-
-    return state.copyWith(
-      runningIps: state.runningIps.where((ip) => ip != localIp).toSet(),
-    );
+    try {
+      // The found devices arrive on the [StartDiscoveryListener] stream;
+      // this stream only signals when the scan is finished.
+      await external(notifier._isolateController)
+          .dispatchTakeResult(
+            IsolateDiscoverySubnetScanAction(
+              networkInterface: localIp,
+              port: port,
+              https: https,
+            ),
+          )
+          .drain<void>();
+    } finally {
+      dispatch(_SetRunningIpsAction(state.runningIps.where((ip) => ip != localIp).toSet()));
+    }
+    return state;
   }
 }
 
@@ -212,23 +213,24 @@ class StartStagedScan extends AsyncReduxAction<NearbyDevicesService, NearbyDevic
   Future<NearbyDevicesState> reduce() async {
     dispatch(_SetRunningFavoriteScanAction(true));
 
-    // The found devices arrive on the [StartDiscoveryListener] stream;
-    // this stream only signals when every stage has finished.
-    await external(notifier._isolateController)
-        .dispatchTakeResult(
-          IsolateDiscoveryStagedScanAction(
-            favorites: favorites.map((e) => (e.ip, e.port)).toList(),
-            networkInterfaces: interfaces,
-            port: port,
-            https: https,
-            grace: grace,
-          ),
-        )
-        .drain<void>();
-
-    return state.copyWith(
-      runningFavoriteScan: false,
-    );
+    try {
+      // The found devices arrive on the [StartDiscoveryListener] stream;
+      // this stream only signals when every stage has finished.
+      await external(notifier._isolateController)
+          .dispatchTakeResult(
+            IsolateDiscoveryStagedScanAction(
+              favorites: favorites.map((e) => (e.ip, e.port)).toList(),
+              networkInterfaces: interfaces,
+              port: port,
+              https: https,
+              grace: grace,
+            ),
+          )
+          .drain<void>();
+    } finally {
+      dispatch(_SetRunningFavoriteScanAction(false));
+    }
+    return state;
   }
 }
 

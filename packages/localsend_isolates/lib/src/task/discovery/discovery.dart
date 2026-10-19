@@ -26,10 +26,10 @@ class DiscoveryService {
   RsDiscovery? _discovery;
   Completer<void> _retryCompleter = Completer();
   bool _listening = false;
-
-  /// Whether the current discovery was stopped by [restartListener], as
-  /// opposed to stopping itself because the multicast sockets failed.
-  bool _restartRequested = false;
+  // Scans wait here while the listener is rebinding. Restarts during startup
+  // invalidate that generation without completing this with a stale instance.
+  Completer<RsDiscovery?> _ready = Completer();
+  int _generation = 0;
 
   /// Starts the discovery and emits every device confirmation:
   /// answered announcements, scan results and devices fed in
@@ -57,6 +57,7 @@ class DiscoveryService {
     });
 
     while (true) {
+      final generation = _generation;
       final syncState = _ref.read(syncProvider);
 
       final RsDiscovery discovery;
@@ -79,6 +80,10 @@ class DiscoveryService {
         );
       } catch (e) {
         _logger.warning('Could not start discovery (group: ${syncState.multicastGroup}, port: ${syncState.port})', e);
+        if (generation != _generation) {
+          continue;
+        }
+        _ready.complete(null);
         // Wait for the next restart request instead of hot-looping
         _retryCompleter = Completer();
         await _retryCompleter.future;
@@ -94,23 +99,33 @@ class DiscoveryService {
         await discovery.setAnswerAnnouncements(answer: false);
       }
 
+      // A restart can arrive while Rust is still binding the old interfaces.
+      if (generation != _generation) {
+        await discovery.stop();
+        continue;
+      }
       _discovery = discovery;
+      _ready.complete(discovery);
 
       // Tell everyone in the network that I am online.
       unawaited(discovery.announce());
 
-      await for (final device in discovery.listen()) {
-        if (!devices.isClosed) {
-          devices.add(device.toDevice());
+      try {
+        await for (final device in discovery.listen()) {
+          if (!devices.isClosed) {
+            devices.add(device.toDevice());
+          }
         }
+      } catch (e, st) {
+        _logger.warning('Discovery listener failed. Restarting discovery.', e, st);
       }
 
       _discovery = null;
+      if (_ready.isCompleted) {
+        _ready = Completer();
+      }
 
-      if (_restartRequested) {
-        // The stream ended because [restartListener] stopped the discovery.
-        _restartRequested = false;
-      } else {
+      if (generation == _generation) {
         // The stream ended because the multicast sockets failed permanently,
         // e.g. because iOS reclaimed them while the app was suspended.
         // The delay avoids hot-looping when binding keeps succeeding but the
@@ -123,10 +138,14 @@ class DiscoveryService {
 
   /// Restarts the discovery, e.g. after the port or the network settings changed.
   void restartListener() {
+    _generation++;
+    if (_ready.isCompleted) {
+      _ready = Completer();
+    }
     final discovery = _discovery;
+    _discovery = null;
     if (discovery != null) {
       // Ends the listen stream, which makes [startListener] rebind.
-      _restartRequested = true;
       unawaited(discovery.stop());
     } else if (!_retryCompleter.isCompleted) {
       // Starting failed previously; let [startListener] try again.
@@ -151,7 +170,8 @@ class DiscoveryService {
   /// Found devices arrive on the [startListener] stream; this method returns
   /// once the whole scan has finished.
   Future<void> scanSubnet({required String networkInterface, required int port, required bool https}) async {
-    final discovery = _discovery;
+    restartListener();
+    final discovery = await _ready.future;
     if (discovery == null) {
       _logger.info('Discovery is not running, skipping subnet scan');
       return;
@@ -177,7 +197,10 @@ class DiscoveryService {
     required bool https,
     required Duration grace,
   }) async {
-    final discovery = _discovery;
+    // Refresh must also recover sockets that silently became stale after
+    // suspension or a Wi-Fi change. Wait for the new listener before scanning.
+    restartListener();
+    final discovery = await _ready.future;
     if (discovery == null) {
       _logger.info('Discovery is not running, skipping staged discovery');
       return;

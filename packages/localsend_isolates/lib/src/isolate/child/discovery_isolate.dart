@@ -109,55 +109,60 @@ Future<void> setupDiscoveryIsolate(
     sendToMain: sendToMain,
     initialData: initialData,
     handler: (ref, task) async {
-      switch (task.data) {
-        case DiscoveryListenTask():
-          await for (final device in ref.read(discoveryProvider).startListener()) {
+      try {
+        switch (task.data) {
+          case DiscoveryListenTask():
+            await for (final device in ref.read(discoveryProvider).startListener()) {
+              sendToMain(
+                IsolateTaskStreamResult.event(
+                  id: task.id,
+                  data: DiscoveryDeviceResult(device: device),
+                ),
+              );
+            }
+            return;
+          case DiscoveryAnnouncementTask():
+            await ref.read(discoveryProvider).sendAnnouncement();
+            break;
+          case DiscoveryRestartTask():
+            ref.read(discoveryProvider).restartListener();
+            break;
+          case DiscoverySubnetScanTask data:
+            await ref
+                .read(discoveryProvider)
+                .scanSubnet(
+                  networkInterface: data.networkInterface,
+                  port: data.port,
+                  https: data.https,
+                );
+            break;
+          case DiscoveryStagedScanTask data:
+            await ref
+                .read(discoveryProvider)
+                .discoverStaged(
+                  favorites: data.favorites,
+                  networkInterfaces: data.networkInterfaces,
+                  port: data.port,
+                  https: data.https,
+                  grace: data.grace,
+                );
+            break;
+          case DiscoveryAddDeviceTask data:
+            await ref.read(discoveryProvider).addDevice(data.device);
+            break;
+          case DiscoveryDeviceLogsTask data:
+            final logs = await ref.read(discoveryProvider).deviceLogs(data.fingerprint);
             sendToMain(
               IsolateTaskStreamResult.event(
                 id: task.id,
-                data: DiscoveryDeviceResult(device: device),
+                data: DiscoveryDeviceLogsResult(logs: logs),
               ),
             );
-          }
-          return;
-        case DiscoveryAnnouncementTask():
-          await ref.read(discoveryProvider).sendAnnouncement();
-          break;
-        case DiscoveryRestartTask():
-          ref.read(discoveryProvider).restartListener();
-          break;
-        case DiscoverySubnetScanTask data:
-          await ref
-              .read(discoveryProvider)
-              .scanSubnet(
-                networkInterface: data.networkInterface,
-                port: data.port,
-                https: data.https,
-              );
-          break;
-        case DiscoveryStagedScanTask data:
-          await ref
-              .read(discoveryProvider)
-              .discoverStaged(
-                favorites: data.favorites,
-                networkInterfaces: data.networkInterfaces,
-                port: data.port,
-                https: data.https,
-                grace: data.grace,
-              );
-          break;
-        case DiscoveryAddDeviceTask data:
-          await ref.read(discoveryProvider).addDevice(data.device);
-          break;
-        case DiscoveryDeviceLogsTask data:
-          final logs = await ref.read(discoveryProvider).deviceLogs(data.fingerprint);
-          sendToMain(
-            IsolateTaskStreamResult.event(
-              id: task.id,
-              data: DiscoveryDeviceLogsResult(logs: logs),
-            ),
-          );
-          break;
+            break;
+        }
+      } catch (e) {
+        sendToMain(IsolateTaskStreamResult.error(id: task.id, error: e.toString()));
+        rethrow;
       }
       sendToMain(
         IsolateTaskStreamResult.done(

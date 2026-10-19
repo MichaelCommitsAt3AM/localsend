@@ -329,13 +329,20 @@ class ClipboardSyncService : Service() {
     private fun notifyImageArrival(title: String, body: String) {
         try {
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(NotificationChannel("clipboard-images", "Clipboard image arrivals", NotificationManager.IMPORTANCE_HIGH))
+            // A new ID is needed because Android keeps the old channel's sound and vibration settings after an update.
+            val channelId = "clipboard-images-silent"
+            manager.createNotificationChannel(NotificationChannel(channelId, "Clipboard image arrivals", NotificationManager.IMPORTANCE_LOW).apply {
+                setSound(null, null)
+                enableVibration(false)
+            })
+            manager.deleteNotificationChannel("clipboard-images")
             val open = PendingIntent.getActivity(this, 4505, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-            val notification = Notification.Builder(this, "clipboard-images")
+            val notification = Notification.Builder(this, channelId)
                 .setSmallIcon(android.R.drawable.ic_menu_share)
                 .setContentTitle(title.filter { !it.isISOControl() }.take(128))
                 .setContentText(body.filter { !it.isISOControl() }.take(256))
                 .setContentIntent(open).setAutoCancel(true).setTimeoutAfter(30000)
+                .setOnlyAlertOnce(true)
                 .setVisibility(Notification.VISIBILITY_PRIVATE).setCategory(Notification.CATEGORY_STATUS)
                 .build()
             manager.notify(4505, notification) // One replaceable arrival item, separate from service notification.

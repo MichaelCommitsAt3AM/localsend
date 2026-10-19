@@ -71,7 +71,7 @@ class LocalSendApp extends StatelessWidget {
                   // ignore: discarded_futures
                   ref.notifier(serverProvider).ensureRunning();
                 }
-                if (checkPlatform([TargetPlatform.iOS])) {
+                if (checkPlatform([TargetPlatform.iOS, TargetPlatform.android])) {
                   // The multicast sockets die the same silent way but cannot be probed, so always rebind them.
                   ref.redux(parentIsolateProvider).dispatch(IsolateDiscoveryRestartAction());
                 }
