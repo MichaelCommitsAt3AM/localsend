@@ -37,6 +37,16 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
   });
 
+  test('opening Shizuku keeps sharing unauthorized and tells the user to return', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'authorize');
+      return {'authorized': false, 'managerOpened': true};
+    });
+    expect(await container.notifier(clipboardSyncProvider).authorize(), false);
+    expect(container.read(clipboardSyncProvider).status, 'Start Shizuku, then return here to allow clipboard access');
+    expect(container.read(clipboardSyncProvider).running, false);
+  });
+
   test('disabled startup loads identity without reading or monitoring the clipboard', () async {
     await container.notifier(clipboardSyncProvider).initialize();
     final state = container.read(clipboardSyncProvider);

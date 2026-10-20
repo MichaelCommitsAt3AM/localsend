@@ -6,6 +6,7 @@ import 'package:localsend_app/pages/home_page_controller.dart';
 import 'package:localsend_app/pages/receive_history_page.dart';
 import 'package:localsend_app/pages/web_share_page.dart';
 import 'package:localsend_app/provider/animation_provider.dart';
+import 'package:localsend_app/provider/clipboard_sync_provider.dart';
 import 'package:localsend_app/provider/local_ip_provider.dart';
 import 'package:localsend_app/provider/network/server/server_provider.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
@@ -53,6 +54,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
 
   @override
   Widget build(BuildContext context) {
+    final sync = context.watch(clipboardSyncProvider);
     final alias = context.watch(settingsProvider.select((s) => s.alias));
     final serverState = context.watch(serverProvider);
     final localIps = context.watch(localIpProvider.select((s) => s.localIps));
@@ -102,6 +104,7 @@ class _ReceiveTabState extends State<ReceiveTab> {
                       ],
                     ),
                   ),
+                  ClipboardSyncStatus(state: sync),
                   Padding(
                     padding: const EdgeInsets.only(top: 10),
                     child: Center(
@@ -244,6 +247,35 @@ class _InfoBox extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Only authenticated peers with a sharing direction count as active sync.
+class ClipboardSyncStatus extends StatelessWidget {
+  final ClipboardSyncState state;
+
+  const ClipboardSyncStatus({required this.state, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final names = state.peers
+        .where((peer) => !peer.pending && (peer.send || peer.receive) && state.connectedPeers.contains(peer.fingerprint))
+        .map((peer) => peer.name.isEmpty ? t.clipboardSync.unnamedDevice : peer.name)
+        .join(', ');
+    if (!state.enabled || !state.running || names.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.sync_rounded, size: 20, color: Theme.of(context).colorScheme.primary),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(t.clipboardSync.activeWithDevices(devices: names), textAlign: TextAlign.center),
+          ),
+        ],
       ),
     );
   }

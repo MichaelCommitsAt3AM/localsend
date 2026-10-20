@@ -85,6 +85,16 @@ class ClipboardSyncPage extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (state.connectionWarning) ...[
+                      const SizedBox(height: 12),
+                      _panel(
+                        context,
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(t.clipboardSync.networkWarning),
+                        ),
+                      ),
+                    ],
                     if (needsAttention) ...[
                       const SizedBox(height: 12),
                       _panel(
@@ -225,6 +235,7 @@ class ClipboardSyncPage extends StatelessWidget {
   bool _accessIssue(String status) =>
       status.contains('Shizuku') || status.contains('access') || status.contains('permission') || status.contains('Authorize');
   String _friendlyIssue(String status) {
+    if (status.startsWith('No compatible Shizuku')) return t.clipboardSync.shizukuNotFound;
     if (status.contains('Shizuku')) return t.clipboardSync.shizukuHelp;
     if (status.contains('photo')) return t.clipboardSync.photoHelp;
     if (Platform.isAndroid && _accessIssue(status)) return t.clipboardSync.accessHelp;

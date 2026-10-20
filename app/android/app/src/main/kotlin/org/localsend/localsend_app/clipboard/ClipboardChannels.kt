@@ -68,7 +68,8 @@ object ClipboardChannels {
                                 name.filter { !it.isISOControl() }.take(64).trim().ifEmpty { "Device ${index + 1}" }
                             }
                             val connected = (call.argument<Number>("connected")?.toInt() ?: 0).coerceIn(0, safeNames.size)
-                            notificationDevices = ClipboardNotificationDevices(safeNames, connected)
+                            val connectionIssue = call.argument<String>("connectionIssue")?.filter { !it.isISOControl() }?.take(512)
+                            notificationDevices = ClipboardNotificationDevices(safeNames, connected, connectionIssue)
                             ClipboardSyncService.instance?.updateNotification()
                             result.success(null)
                         }
@@ -179,13 +180,38 @@ object ClipboardChannels {
     private fun authorize(result: MethodChannel.Result) {
         if (permissionResult != null || photoResult != null) { result.error("BUSY", "Permission request already open", null); return }
         val host = activity.get()
-        if (host == null || Build.VERSION.SDK_INT !in 33..36 || !Shizuku.pingBinder()) {
+        if (host == null || Build.VERSION.SDK_INT !in 33..36) {
             result.error("SHIZUKU_UNAVAILABLE", "Start ADB-mode Shizuku on Android 13–16 first", null); return
+        }
+        if (!Shizuku.pingBinder() || Shizuku.shouldShowRequestPermissionRationale()) {
+            openShizuku(host, result)
+            return
         }
         permissionResult = result
         if (host.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             host.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_REQUEST)
         } else requestShizuku()
+    }
+
+    private fun openShizuku(host: Activity, result: MethodChannel.Result) {
+        val manager = host.packageManager
+        // Forks can use a different application ID. Discover compatible managers by
+        // the API permission they own and the binder-request receiver they expose.
+        val permissionOwner = try {
+            manager.getPermissionInfo("moe.shizuku.manager.permission.API_V23", 0).packageName
+        } catch (_: PackageManager.NameNotFoundException) { null }
+        val packages = listOfNotNull(permissionOwner) + manager.queryBroadcastReceivers(
+            Intent("rikka.shizuku.intent.action.REQUEST_BINDER"), 0
+        ).map { it.activityInfo.packageName } + "moe.shizuku.privileged.api"
+        val launches = packages.distinct().mapNotNull { manager.getLaunchIntentForPackage(it) }
+        if (launches.isEmpty()) {
+            result.error("SHIZUKU_NOT_FOUND", "No compatible Shizuku app found. Install or open your Shizuku version manually, start it, then return here.", null)
+            return
+        }
+        val intent = if (launches.size == 1) launches.first() else
+            Intent.createChooser(launches.first(), "Open Shizuku").putExtra(Intent.EXTRA_INITIAL_INTENTS, launches.drop(1).toTypedArray())
+        host.startActivity(intent)
+        result.success(mapOf("authorized" to false, "managerOpened" to true))
     }
 
     fun permissionResult(request: Int, grants: IntArray) {

@@ -115,6 +115,13 @@ class Translations$clipboardSync$en {
   /// en: 'Sharing needs attention'
   String get needsAttention => 'Sharing needs attention';
 
+  /// en: 'Clipboard sync active with {devices}'
+  String activeWithDevices({required Object devices}) => 'Clipboard sync active with ${devices}';
+
+  /// en: 'Cannot reach your paired devices. Check that they are awake, on the same network, and have syncing enabled. Some public or guest Wi-Fi networks block communication between devices; try a private Wi-Fi network or personal hotspot.'
+  String get networkWarning =>
+      'Cannot reach your paired devices. Check that they are awake, on the same network, and have syncing enabled. Some public or guest Wi-Fi networks block communication between devices; try a private Wi-Fi network or personal hotspot.';
+
   /// en: 'Set up access'
   String get setupAccess => 'Set up access';
 
@@ -179,6 +186,10 @@ class Translations$clipboardSync$en {
 
   /// en: 'Device identity'
   String get identityLabel => 'Device identity';
+
+  /// en: 'No compatible Shizuku app was found. Open your Shizuku version manually, start it, then return here and tap Set up access again.'
+  String get shizukuNotFound =>
+      'No compatible Shizuku app was found. Open your Shizuku version manually, start it, then return here and tap Set up access again.';
 
   /// en: 'Open Shizuku and start it, then return here to allow clipboard access.'
   String get shizukuHelp => 'Open Shizuku and start it, then return here to allow clipboard access.';

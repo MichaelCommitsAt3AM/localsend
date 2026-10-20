@@ -118,6 +118,7 @@
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
+        <receiver android:name=".clipboard.ClipboardNotificationDismissedReceiver" android:exported="false" />
         <service android:name=".clipboard.ClipboardSyncService"
             android:foregroundServiceType="connectedDevice" android:exported="false" />
         <provider android:name="androidx.core.content.FileProvider"

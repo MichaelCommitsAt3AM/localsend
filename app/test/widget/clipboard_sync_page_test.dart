@@ -352,6 +352,34 @@ void main() {
     container.disposeContainer();
   });
 
+  testWidgets('sustained connection outage explains possible public Wi-Fi isolation', (tester) async {
+    final container = RefenaContainer(
+      overrides: [
+        clipboardSyncProvider.overrideWithNotifier(
+          (_) => _Controller(
+            const ClipboardSyncState(
+              ready: true,
+              enabled: true,
+              running: true,
+              connectionWarning: true,
+              status: 'Waiting for paired devices',
+            ),
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      RefenaScope.withContainer(
+        container: container,
+        child: const MaterialApp(home: ClipboardSyncPage()),
+      ),
+    );
+    expect(find.text(t.clipboardSync.networkWarning), findsOneWidget);
+    expect(find.text(t.clipboardSync.needsAttention), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    container.disposeContainer();
+  });
+
   testWidgets('configuration failure shows understandable guidance instead of appearing as an unexplained disabled page', (tester) async {
     final container = RefenaContainer(
       overrides: [

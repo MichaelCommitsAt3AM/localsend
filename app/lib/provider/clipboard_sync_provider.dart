@@ -62,6 +62,7 @@ class ClipboardSyncState {
   final bool syncImages;
   final int connected;
   final Set<String> connectedPeers;
+  final bool connectionWarning;
   final bool hasEnabledBefore;
   final int captures;
   final int applied;
@@ -76,6 +77,7 @@ class ClipboardSyncState {
     this.syncImages = false,
     this.connected = 0,
     this.connectedPeers = const {},
+    this.connectionWarning = false,
     this.hasEnabledBefore = false,
     this.captures = 0,
     this.applied = 0,
@@ -110,6 +112,8 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   Future<void> _nativeQueue = Future.value();
   bool _captureQueued = false;
   String? _notificationMetadata;
+  Timer? _connectionTimer;
+  bool _connectionWarning = false;
   String? _captureIssue;
   String? _screenshotIssue;
   final _pairingRequests = StreamController<RsClipboardPairing>.broadcast();
@@ -131,6 +135,7 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
 
   @override
   void dispose() {
+    _connectionTimer?.cancel();
     _pairingDisposed = true;
     _acceptPairingRequests = false;
     _receiverRetry?.cancel();
@@ -148,6 +153,7 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
       syncImages: _syncImages,
       connected: _connected,
       connectedPeers: Set.unmodifiable(_connectedPeers),
+      connectionWarning: _connectionWarning,
       hasEnabledBefore: _hasEnabledBefore,
       captures: _captures,
       applied: _applied,
@@ -157,11 +163,12 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
     );
     if (Platform.isAndroid) {
       final names = _peers.where((p) => !p.pending && _connectedPeers.contains(p.fingerprint)).map((p) => _pairingName(p.name)).toList();
-      final metadata = jsonEncode({'names': names, 'connected': _connected});
+      final notification = {'names': names, 'connected': _connected, 'connectionIssue': _connectionWarning ? t.clipboardSync.networkWarning : null};
+      final metadata = jsonEncode(notification);
       if (_notificationMetadata != metadata) {
         _notificationMetadata = metadata;
         unawaited(
-          _methods.invokeMethod<void>('updateNotification', {'names': names, 'connected': _connected}).catchError((Object _) {
+          _methods.invokeMethod<void>('updateNotification', notification).catchError((Object _) {
             // Notification metadata is best effort; it must not interrupt clipboard sync.
             _notificationMetadata = null;
           }),
@@ -226,7 +233,13 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   Future<bool> authorize() async {
     try {
       final result = await _methods.invokeMapMethod<String, dynamic>('authorize');
-      _publish(result?['authorized'] == true ? 'Clipboard access authorized' : 'Clipboard access not authorized');
+      _publish(
+        result?['managerOpened'] == true
+            ? 'Start Shizuku, then return here to allow clipboard access'
+            : result?['authorized'] == true
+            ? 'Clipboard access authorized'
+            : 'Clipboard access not authorized',
+      );
       if (result?['authorized'] == true && _syncImages && Platform.isAndroid) {
         final photos = await _methods.invokeMethod<bool>('authorizeImages') == true;
         _screenshotIssue = photos ? null : 'Screenshot sharing paused: allow full photo access';
@@ -530,6 +543,7 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
       if (Platform.isAndroid) _captureIssue = 'Starting Android clipboard listener';
       await _methods.invokeMethod<void>('start', {'syncImages': _syncImages});
       if (_runtime != runtime) return;
+      _watchConnection();
       _publish('Waiting for paired devices');
       unawaited(_updates(runtime));
     } catch (_) {
@@ -642,6 +656,7 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
         revision = update.revision;
         _connectedPeers = update.connectedPeers.toSet();
         _connected = _connectedPeers.length;
+        _watchConnection();
         _publish(update.error ?? (_connected > 0 ? 'Connected' : 'Waiting for paired devices'));
         final text = update.text;
         final image = update.imagePng;
@@ -690,9 +705,28 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
     }
   }
 
+  // A failed connection cannot prove AP isolation: the peer may simply be
+  // offline. Warn only after a sustained outage, and explain both possibilities.
+  void _watchConnection() {
+    if (_connected > 0) {
+      _connectionTimer?.cancel();
+      _connectionTimer = null;
+      _connectionWarning = false;
+    } else if (_connectionTimer == null && _peers.any((p) => !p.pending && (p.send || p.receive))) {
+      _connectionTimer = Timer(const Duration(seconds: 30), () {
+        if (_runtime == null || _connected > 0) return;
+        _connectionWarning = true;
+        _publish('Waiting for paired devices');
+      });
+    }
+  }
+
   Future<void> _stop() async {
     final runtime = _runtime;
     _runtime = null;
+    _connectionTimer?.cancel();
+    _connectionTimer = null;
+    _connectionWarning = false;
     _captureIssue = null;
     _screenshotIssue = null;
     _connected = 0;

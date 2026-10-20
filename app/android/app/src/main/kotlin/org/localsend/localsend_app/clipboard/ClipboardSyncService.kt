@@ -12,7 +12,7 @@ import java.io.File
 import java.util.concurrent.*
 import android.net.Uri
 
-data class ClipboardNotificationDevices(val names: List<String>, val connected: Int)
+data class ClipboardNotificationDevices(val names: List<String>, val connected: Int, val connectionIssue: String? = null)
 
 /** Ordinary app-UID owner; only the separate shell helper reads privileged clips. */
 class ClipboardSyncService : Service() {
@@ -163,9 +163,9 @@ class ClipboardSyncService : Service() {
     private fun buildNotification(): Notification {
         val devices = ClipboardChannels.notificationDevices
         val counts = "${devices.connected} connected ${if (devices.connected == 1) "device" else "devices"}"
-        val summary = captureIssue ?: screenshotIssue ?: counts
+        val summary = captureIssue ?: screenshotIssue ?: devices.connectionIssue ?: counts
         val details = android.text.SpannableStringBuilder()
-        details.append(listOfNotNull(captureIssue, screenshotIssue, counts).joinToString("\n"))
+        details.append(listOfNotNull(captureIssue, screenshotIssue, devices.connectionIssue, counts).joinToString("\n"))
         if (devices.connected > 0) {
             for (name in devices.names) {
                 details.append("\n")
@@ -179,15 +179,23 @@ class ClipboardSyncService : Service() {
         }
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1, Intent(this, ClipboardSyncService::class.java).setAction("stop"), PendingIntent.FLAG_IMMUTABLE)
+        val dismissed = PendingIntent.getBroadcast(this, 4506,
+            Intent(this, ClipboardNotificationDismissedReceiver::class.java), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, "clipboard-sync")
             .setSmallIcon(android.R.drawable.ic_menu_share).setContentTitle("LocalSend clipboard sync")
             .setContentText(summary).setStyle(Notification.BigTextStyle().bigText(details))
-            .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setDeleteIntent(dismissed).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setVisibility(Notification.VISIBILITY_PRIVATE)
             .addAction(Notification.Action.Builder(null, "Stop", stop).build()).build()
     }
 
     fun updateNotification() {
         if (active) getSystemService(NotificationManager::class.java).notify(4501, buildNotification())
+    }
+
+    fun restoreNotification() {
+        // Let Android finish removing the old item before reposting. The active
+        // check in updateNotification prevents Stop/teardown from resurrecting it.
+        main.postDelayed({ updateNotification() }, 500)
     }
 
     private fun setCaptureIssue(issue: String?) {
@@ -383,5 +391,12 @@ class ClipboardSyncService : Service() {
         ClipboardChannels.emit("stopped")
         stopCallbacks.toList().forEach { it() }; stopCallbacks.clear()
         super.onDestroy()
+    }
+}
+
+/** Dismissal restores only an existing service; it never restarts stopped sync. */
+class ClipboardNotificationDismissedReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        ClipboardSyncService.instance?.restoreNotification()
     }
 }
