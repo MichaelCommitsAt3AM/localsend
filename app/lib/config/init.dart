@@ -43,6 +43,7 @@ import 'package:localsend_app/util/ui/dynamic_colors.dart';
 import 'package:localsend_app/util/ui/snackbar.dart';
 import 'package:localsend_app/widget/dialogs/local_network_dialog.dart';
 import 'package:localsend_isolates/isolate.dart';
+import 'package:localsend_isolates/model/device.dart';
 import 'package:localsend_isolates/model/dto/file_dto.dart';
 import 'package:localsend_isolates/model/dto/multicast_dto.dart';
 import 'package:localsend_isolates/rust/api/logging.dart' as rust_logging;
@@ -190,7 +191,20 @@ Future<RefenaContainer> preInit(List<String> args) async {
   );
 
   await container.redux(parentIsolateProvider).dispatchAsync(IsolateSetupAction());
-  await container.notifier(clipboardSyncProvider).initialize();
+  await container
+      .notifier(clipboardSyncProvider)
+      .initialize(
+        discoveryHosts: () {
+          container.redux(nearbyDevicesProvider).dispatch(StartMulticastScan());
+          return container
+              .read(nearbyDevicesProvider)
+              .devices
+              .values
+              .expand(
+                (device) => [if (device.ip != null) device.ip!, ...device.channels.whereType<HttpChannel>().map((channel) => channel.host)],
+              );
+        },
+      );
 
   return container;
 }

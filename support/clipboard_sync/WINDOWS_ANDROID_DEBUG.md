@@ -20,6 +20,12 @@ Linux and macOS clipboard implementation and testing are deferred indefinitely.
 - Independent direct TCP listener on port 53318 for this development slice.
   It does not change existing HTTP routes or file-transfer sessions. Moving the
   ordered channel onto the planned additive HTTPS upgrade remains follow-up work.
+- Disconnected clipboard peers refresh their saved IPv4 address using normal
+  LocalSend discovery. While disconnected, discovery and bounded TLS probes run
+  every 10 seconds (probes run off the UI isolate). An address is saved only after
+  its clipboard certificate matches an existing pairing; file-transfer identities
+  and device names do not authorize clipboard access. Update both apps for this
+  recovery behavior. Connected peers are not probed.
 - One shared Rust state machine: 8 peers maximum, 64 KiB text maximum, Lamport
   ordering with fingerprint tie-break, replay frontier, 5-minute RAM retention,
   no startup clipboard snapshot, no transitive forwarding and no clipboard logs.
@@ -89,6 +95,25 @@ Its Activity is `org.localsend.localsend_app.MainActivity`.
    identical value can be suppressed; change the value for fresh-event checks.
 7. Test Stop, revocation, reconnection, lock/unlock, size boundaries and ordinary
    LocalSend transfers. Never use secrets or real credentials as test fixtures.
+8. Pair on one Wi-Fi network, then move both devices to another network with
+   different IP addresses. With LocalSend discovery working and clipboard sync
+   authorized on both, confirm reconnection without pairing again. Check that
+   Technical details shows the new address. Confirm that an unrelated discovered
+   device cannot replace the pairing, even if it uses the paired device's name.
+
+## Windows installer update testing
+
+Enable launch at login, start minimized, and minimize to tray. Start the old app,
+hide it to the tray, and run the new installer against that installation. Accept
+closing the running application. Setup must replace the executable and DLLs
+without the "unable to automatically close" error. The new installer enables
+Restart Manager's force-close fallback for older apps lacking session shutdown
+handling, so finish active transfers before updating.
+
+For subsequent updates, the runner handles `WM_QUERYENDSESSION` and exits on a
+confirmed `WM_ENDSESSION`, bypassing normal close-to-tray behavior. A canceled
+session (`wParam == FALSE`) leaves the app running. Also verify that clicking the
+ordinary close button still minimizes to tray when that preference is enabled.
 
 ## Copied image testing
 

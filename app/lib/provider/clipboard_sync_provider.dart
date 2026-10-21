@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:localsend_app/gen/strings.g.dart';
+import 'package:localsend_app/util/clipboard_peer_probe.dart';
 import 'package:localsend_isolates/rust/api/clipboard.dart';
 import 'package:localsend_isolates/rust/api/crypto.dart' as rust_crypto;
 import 'package:refena_flutter/refena_flutter.dart';
@@ -89,8 +90,15 @@ class ClipboardSyncState {
 
 class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   final Future<RsClipboardPairing> Function(String name)? _pairingReceiverFactory;
-  ClipboardSyncController({Future<RsClipboardPairing> Function(String name)? createPairingReceiver})
-    : _pairingReceiverFactory = createPairingReceiver;
+  ClipboardSyncController({
+    Future<RsClipboardPairing> Function(String name)? createPairingReceiver,
+    this.probePeers = probeClipboardPeers,
+  }) : _pairingReceiverFactory = createPairingReceiver;
+
+  final Future<Map<String, String>> Function(String, String, Set<String>, List<String>, int) probePeers;
+  Iterable<String> Function()? _discoveryHosts;
+  Timer? _addressTimer;
+  bool _refreshingAddresses = false;
   static const _methods = MethodChannel('org.localsend.localsend_app/clipboard');
   static const _events = EventChannel('org.localsend.localsend_app/clipboard_events');
   String? _certificate;
@@ -135,6 +143,7 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
 
   @override
   void dispose() {
+    _addressTimer?.cancel();
     _connectionTimer?.cancel();
     _pairingDisposed = true;
     _acceptPairingRequests = false;
@@ -177,7 +186,8 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
     }
   }
 
-  Future<void> initialize() async {
+  Future<void> initialize({Iterable<String> Function()? discoveryHosts}) async {
+    _discoveryHosts = discoveryHosts;
     if (!Platform.isWindows && !Platform.isAndroid) return;
     try {
       final stored = await _methods.invokeMethod<String>('loadSecret');
@@ -308,6 +318,47 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
       _publish('Clipboard peer configuration could not be saved');
     } finally {
       _busy = false;
+    }
+  }
+
+  /// File-transfer and clipboard certificates are independent. Never match by
+  /// discovery fingerprint or alias: prove possession of the pinned clipboard key.
+  Future<void> refreshDiscoveredAddresses(Iterable<String> hosts) async {
+    if (_refreshingAddresses || _busy || !_enabled || _certificate == null || _pairingDisposed) return;
+    final snapshot = _peers;
+    final pins = snapshot.where((p) => !p.pending && !_connectedPeers.contains(p.fingerprint)).map((p) => p.fingerprint).toSet();
+    if (pins.isEmpty) return;
+    final candidates = hosts
+        .where((host) {
+          final ip = InternetAddress.tryParse(host);
+          return ip != null && ip.type == InternetAddressType.IPv4 && !ip.isLoopback && !ip.isMulticast && host != '0.0.0.0';
+        })
+        .toSet()
+        .take(64)
+        .toList();
+    if (candidates.isEmpty) return;
+    _refreshingAddresses = true;
+    try {
+      final verified = await probePeers(_certificate!, _privateKey!, pins, candidates, clipboardSyncPort);
+      // Pairing, consent, and connection state may have changed during the probe.
+      if (_pairingDisposed || !_enabled || _busy || !identical(snapshot, _peers)) return;
+      final peers = snapshot.map((peer) {
+        final address = verified[peer.fingerprint];
+        if (peer.pending || _connectedPeers.contains(peer.fingerprint) || address == null || address == peer.address) return peer;
+        return ClipboardPeer(
+          fingerprint: peer.fingerprint,
+          address: address,
+          send: peer.send,
+          receive: peer.receive,
+          name: peer.name,
+        );
+      }).toList();
+      if (List.generate(peers.length, (i) => identical(peers[i], snapshot[i])).every((same) => same)) return;
+      await setPeers(peers);
+    } catch (_) {
+      // Discovery failure must not disable an otherwise working clipboard runtime.
+    } finally {
+      _refreshingAddresses = false;
     }
   }
 
@@ -540,6 +591,12 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
         return;
       }
       _runtime = runtime;
+      if (_discoveryHosts != null) {
+        _addressTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+          if (_refreshingAddresses || _busy || !_peers.any((p) => !p.pending && !_connectedPeers.contains(p.fingerprint))) return;
+          unawaited(refreshDiscoveredAddresses(_discoveryHosts!()));
+        });
+      }
       if (Platform.isAndroid) _captureIssue = 'Starting Android clipboard listener';
       await _methods.invokeMethod<void>('start', {'syncImages': _syncImages});
       if (_runtime != runtime) return;
@@ -722,6 +779,8 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   }
 
   Future<void> _stop() async {
+    _addressTimer?.cancel();
+    _addressTimer = null;
     final runtime = _runtime;
     _runtime = null;
     _connectionTimer?.cancel();

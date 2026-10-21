@@ -43,6 +43,19 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // Restart Manager uses session messages when an installer replaces files.
+  // Handle these before plugins: closing to the tray must not veto an update.
+  if (message == WM_QUERYENDSESSION) {
+    return TRUE;
+  }
+  if (message == WM_ENDSESSION) {
+    if (wparam) {
+      // Bypass WM_CLOSE (which intentionally minimizes to the tray). Destroying
+      // the window releases the engine and posts WM_QUIT through Win32Window.
+      ::DestroyWindow(hwnd);
+    }
+    return 0;
+  }
   if (clipboard_bridge_ && clipboard_bridge_->HandleMessage(message, wparam)) return 0;
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {

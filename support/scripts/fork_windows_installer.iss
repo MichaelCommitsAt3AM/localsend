@@ -39,11 +39,14 @@ UninstallDisplayIcon={app}\localsend_app.exe
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-CloseApplications=yes
+; Older tray instances may ignore Restart Manager's graceful shutdown request.
+CloseApplications=force
 RestartApplications=no
 
 [Files]
-Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "*.pdb,*.msix,*.manifest,install_msix_helper.ps1,logo.ico"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Exclude only the setup icon at the payload root. The Flutter tray icon at
+; data\flutter_assets\assets\img\logo.ico must be installed.
+Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "*.pdb,*.msix,*.manifest,install_msix_helper.ps1,\logo.ico"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\LocalSend"; Filename: "{app}\localsend_app.exe"

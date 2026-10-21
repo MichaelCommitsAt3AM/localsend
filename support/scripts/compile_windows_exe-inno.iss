@@ -12,7 +12,7 @@
 #endif
 
 #define MyAppName "LocalSend"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "Tien Do Nam"
 #define MyAppURL "https://localsend.org"
 #define MyAppExeName "localsend_app.exe"
@@ -49,6 +49,9 @@ SignTool=MySignTool
 #endif
 ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
+; Older versions do not exit on Restart Manager's WM_ENDSESSION request.
+; Allow its scoped force-close fallback so tray instances cannot block updates.
+CloseApplications=force
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

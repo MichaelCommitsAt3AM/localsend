@@ -31,7 +31,7 @@ void main(List<String> args) {
   );
   _replace(
     file: '$root/Cargo.lock',
-    pattern: 'name = "localsend-cli"\nversion = ".+"',
+    pattern: 'name = "localsend-cli"\\r?\\nversion = ".+"',
     replacement: 'name = "localsend-cli"\nversion = "$version"',
   );
   _replace(
