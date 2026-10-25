@@ -21,6 +21,9 @@ struct TestServer {
     port: u16,
     /// Number of `PrepareDownload` events received.
     prepare_download_events: Arc<AtomicU32>,
+    // Keep the application's v2 event receiver alive for readiness checks,
+    // even though these web-download tests do not consume v2 events.
+    _v2_event_rx: mpsc::Receiver<ServerEventV2>,
     _stop_tx: oneshot::Sender<()>,
 }
 
@@ -110,8 +113,8 @@ async fn start_test_server(
     });
 
     // v2 stays enabled so the `/info` endpoint (which advertises `download`) can be
-    // exercised. Its event channel is unused by these tests.
-    let (v2_event_tx, _v2_event_rx) = tokio::sync::mpsc::channel::<ServerEventV2>(16);
+    // exercised. Retain its receiver for the lifetime of the test server.
+    let (v2_event_tx, v2_event_rx) = tokio::sync::mpsc::channel::<ServerEventV2>(16);
 
     let (stop_tx, stop_rx) = oneshot::channel::<()>();
 
@@ -153,6 +156,7 @@ async fn start_test_server(
     TestServer {
         port: handle.port(),
         prepare_download_events,
+        _v2_event_rx: v2_event_rx,
         _stop_tx: stop_tx,
     }
 }
