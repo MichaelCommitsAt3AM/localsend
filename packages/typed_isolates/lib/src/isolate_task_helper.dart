@@ -27,7 +27,7 @@ extension IsolateTaskStreamConnector<R, S> on IsolateConnector<IsolateTaskStream
           controller.close(); // ignore: discarded_futures
         }
       }
-    });
+    }, onDone: () => unawaited(controller.close()));
 
     return controller.stream;
   }

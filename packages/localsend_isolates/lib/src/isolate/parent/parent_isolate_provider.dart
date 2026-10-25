@@ -105,3 +105,18 @@ class IsolateDisposeAction extends ReduxAction<IsolateController, ParentIsolateS
     return state;
   }
 }
+
+/// Replaces an unresponsive server isolate without waiting for it to handle a
+/// stop task. Starting the next Rust server stops the previous native instance.
+class IsolateRecreateHttpServerAction extends AsyncReduxAction<IsolateController, ParentIsolateState> {
+  @override
+  Future<ParentIsolateState> reduce() async {
+    state.httpServer?.isolate.kill();
+    final httpServer =
+        await TypedIsolates.startIsolate<IsolateTaskStreamResult<HttpServerEvent>, SendToIsolateData<IsolateTask<BaseHttpServerTask>>, InitialData>(
+          task: setupHttpServerIsolate,
+          param: InitialData(syncState: state.syncState, logLevel: Logger.root.level),
+        );
+    return state.copyWith(httpServer: httpServer);
+  }
+}

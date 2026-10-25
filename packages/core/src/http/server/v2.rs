@@ -207,6 +207,15 @@ pub(crate) async fn register(
 }
 
 pub(crate) async fn info(state: AppState) -> Result<JsonResponse<InfoResponseDtoV2>, AppError> {
+    // The HTTP listener can outlive its application event receiver (for example
+    // when a mobile isolate exits). Do not report a healthy transfer service:
+    // prepare-upload would fail immediately without anyone to answer it.
+    if state.v2.as_ref().is_some_and(|v2| v2.event_tx.is_closed()) {
+        return Err(AppError::Message(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Server event receiver is unavailable".to_string(),
+        ));
+    }
     let info = state.info.lock().await.clone();
     let download = state.web.share.download().is_some();
 

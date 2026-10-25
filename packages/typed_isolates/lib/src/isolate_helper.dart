@@ -37,13 +37,29 @@ class TypedIsolates {
     required P param,
   }) async {
     final receivePort = ReceivePort();
-    final isolate = await Isolate.spawn(
-      (param) => _isolateRunner<R, S, P>(param),
-      _IsolateParam<R, S, P>(receivePort.sendPort, task, param),
-    );
-
+    final exitPort = ReceivePort();
     final receiveFromIsolateController = StreamController<R>();
     final sendToIsolateCompleter = Completer<SendPort>();
+    final Isolate isolate;
+    try {
+      isolate = await Isolate.spawn(
+        (param) => _isolateRunner<R, S, P>(param),
+        _IsolateParam<R, S, P>(receivePort.sendPort, task, param),
+        onExit: exitPort.sendPort,
+      );
+    } catch (_) {
+      receivePort.close();
+      exitPort.close();
+      rethrow;
+    }
+    exitPort.listen((_) {
+      receivePort.close();
+      exitPort.close();
+      unawaited(receiveFromIsolateController.close());
+      if (!sendToIsolateCompleter.isCompleted) {
+        sendToIsolateCompleter.completeError(StateError('Isolate exited before connecting'));
+      }
+    });
     receivePort.listen((message) {
       switch (message) {
         case R():

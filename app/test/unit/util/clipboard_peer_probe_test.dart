@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -45,5 +46,36 @@ void main() {
   test('a paired certificate serving another protocol is rejected', () async {
     final server = await serve(['another-protocol']);
     expect(await probeClipboardPeers(certificate, key, {identity}, ['127.0.0.1'], server.port), isEmpty);
+  });
+
+  test('a stalled TLS handshake times out and releases the connection so discovery can retry', () async {
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    final disconnected = Completer<void>();
+    final clients = <Socket>[];
+    server.listen((socket) {
+      clients.add(socket);
+      // Consume the ClientHello but never answer it.
+      socket.listen(
+        (_) {},
+        onDone: () {
+          if (!disconnected.isCompleted) disconnected.complete();
+        },
+      );
+    });
+    addTearDown(() async {
+      for (final client in clients) {
+        client.destroy();
+      }
+      await server.close();
+    });
+
+    expect(
+      await probeClipboardPeers(certificate, key, {identity}, ['127.0.0.1'], server.port).timeout(const Duration(seconds: 6)),
+      isEmpty,
+    );
+    await disconnected.future.timeout(const Duration(seconds: 2));
+
+    final healthy = await serve(['localsend-clipboard/2']);
+    expect(await probeClipboardPeers(certificate, key, {identity}, ['127.0.0.1'], healthy.port), {identity: '127.0.0.1:${healthy.port}'});
   });
 }

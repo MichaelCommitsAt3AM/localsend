@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/model/cross_file.dart';
@@ -11,6 +10,7 @@ import 'package:localsend_app/provider/network/server/server_utils.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
 import 'package:localsend_app/util/alias_generator.dart';
 import 'package:localsend_app/util/native/web_pages_loader.dart';
+import 'package:localsend_app/util/server_health_probe.dart';
 import 'package:localsend_isolates/constants.dart';
 import 'package:localsend_isolates/isolate.dart';
 import 'package:localsend_isolates/model/dto/multicast_dto.dart';
@@ -183,6 +183,7 @@ class ServerService extends Notifier<ServerState?> {
         );
 
     final started = Completer<void>();
+    var ended = false;
     final subscription = events.listen(
       (event) {
         if (event is HttpServerStartedEvent) {
@@ -200,6 +201,14 @@ class ServerService extends Notifier<ServerState?> {
           _logger.severe('HTTP server error: $error');
         }
       },
+      onDone: () {
+        ended = true;
+        if (!started.isCompleted) {
+          started.completeError(StateError('Server event stream ended before startup'));
+        } else if (identical(_serverEvents, events)) {
+          _recoverAfterStreamEnds(events);
+        }
+      },
     );
 
     try {
@@ -212,6 +221,7 @@ class ServerService extends Notifier<ServerState?> {
     }
 
     _subscription = subscription;
+    _serverEvents = events;
 
     final newServerState = ServerState(
       alias: alias,
@@ -222,12 +232,16 @@ class ServerService extends Notifier<ServerState?> {
     );
 
     state = newServerState;
+    if (ended) {
+      _recoverAfterStreamEnds(events);
+    }
     _logger.info('Server started. (Port: $port, ${https ? 'HTTPS' : 'HTTP'} only)');
     return newServerState;
   }
 
   Future<void> stopServer() async {
     _logger.info('Stopping server...');
+    _serverEvents = null;
     await _subscription?.cancel();
     _subscription = null;
     await ref.redux(parentIsolateProvider).dispatchAsync(IsolateHttpServerStopAction());
@@ -380,8 +394,22 @@ class ServerService extends Notifier<ServerState?> {
   }
 
   bool _probeInFlight = false;
+  bool _recoveryInFlight = false;
+  Stream<HttpServerEvent>? _serverEvents;
 
-  /// Restarts the server when it no longer accepts a loopback probe connection, e.g. because iOS invalidated the socket while the app was suspended.
+  void _recoverAfterStreamEnds(Stream<HttpServerEvent> events) {
+    // Avoid a restart loop if the replacement isolate cannot initialize. A
+    // deliberate stop or a newer server invalidates this recovery attempt.
+    Timer(const Duration(seconds: 1), () {
+      if (identical(_serverEvents, events)) {
+        _logger.warning('The server event stream ended unexpectedly. Recreating the server isolate.');
+        unawaited(_restartDeadServer());
+      }
+    });
+  }
+
+  /// Checks the HTTP service after mobile suspension, including whether its
+  /// application event receiver is still alive.
   Future<void> ensureRunning() async {
     final current = state;
     if (current == null || _probeInFlight) {
@@ -390,15 +418,16 @@ class ServerService extends Notifier<ServerState?> {
 
     _probeInFlight = true;
     try {
-      final socket = await Socket.connect(
-        InternetAddress.loopbackIPv4,
-        current.port,
-        timeout: const Duration(seconds: 1),
+      await probeLocalServer(
+        port: current.port,
+        https: current.https,
+        identity: ref.read(parentIsolateProvider).syncState.securityContext,
       );
-      socket.destroy();
     } catch (e) {
-      _logger.warning('The server did not accept a probe connection: $e. Restarting server.');
-      await _restartDeadServer();
+      if (identical(state, current)) {
+        _logger.warning('The server failed its HTTP readiness probe: $e. Restarting server.');
+        await _restartDeadServer();
+      }
     } finally {
       _probeInFlight = false;
     }
@@ -407,12 +436,18 @@ class ServerService extends Notifier<ServerState?> {
   /// Restarts the server with its current configuration after its listening socket died.
   Future<void> _restartDeadServer() async {
     final current = state;
-    if (current == null) {
+    if (current == null || _recoveryInFlight) {
       return;
     }
 
+    _recoveryInFlight = true;
     try {
-      await restartServer(
+      _serverEvents = null;
+      await _subscription?.cancel();
+      _subscription = null;
+      await ref.redux(parentIsolateProvider).dispatchAsync(IsolateRecreateHttpServerAction());
+      state = null;
+      await startServer(
         alias: current.alias,
         port: current.port,
         https: current.https,
@@ -427,6 +462,8 @@ class ServerService extends Notifier<ServerState?> {
       );
     } catch (e) {
       _logger.severe('Failed to restart the server after its listener failed', e);
+    } finally {
+      _recoveryInFlight = false;
     }
   }
 

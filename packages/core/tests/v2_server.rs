@@ -30,6 +30,42 @@ struct TestServer {
     _stop_tx: oneshot::Sender<()>,
 }
 
+#[tokio::test]
+async fn info_reports_unavailable_when_application_event_receiver_exits() {
+    let (event_tx, event_rx) = mpsc::channel(16);
+    let (stop_tx, stop_rx) = oneshot::channel();
+    let server = start_with_port(
+        0,
+        None,
+        ClientInfo {
+            alias: "Receiver".into(),
+            version: "2.2".into(),
+            device_model: None,
+            device_type: None,
+            token: "test".into(),
+        },
+        None,
+        Some(ServerConfigV2 {
+            pin: None,
+            verify_checksums: true,
+            event_tx,
+        }),
+        WebConfig::default(),
+        stop_rx,
+    )
+    .await
+    .unwrap();
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let url = format!("http://127.0.0.1:{}/api/localsend/v2/info", server.port());
+    assert_eq!(client.get(&url).send().await.unwrap().status(), 200);
+    drop(event_rx);
+    let response = client.get(&url).send().await.unwrap();
+    assert_eq!(response.status(), 503);
+    assert!(response.text().await.unwrap().contains("event receiver"));
+    let _ = stop_tx.send(());
+    server.wait_stopped().await;
+}
+
 /// Starts a test server.
 ///
 /// Uploads are received as a stream, or written by the server into `save_dir`
