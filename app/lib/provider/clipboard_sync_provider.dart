@@ -323,10 +323,13 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
 
   /// File-transfer and clipboard certificates are independent. Never match by
   /// discovery fingerprint or alias: prove possession of the pinned clipboard key.
-  Future<void> refreshDiscoveredAddresses(Iterable<String> hosts) async {
+  Future<void> refreshDiscoveredAddresses(Iterable<String> hosts, {String? fingerprint}) async {
     if (_refreshingAddresses || _busy || !_enabled || _certificate == null || _pairingDisposed) return;
     final snapshot = _peers;
-    final pins = snapshot.where((p) => !p.pending && !_connectedPeers.contains(p.fingerprint)).map((p) => p.fingerprint).toSet();
+    final pins = snapshot
+        .where((p) => !p.pending && !_connectedPeers.contains(p.fingerprint) && (fingerprint == null || p.fingerprint == fingerprint))
+        .map((p) => p.fingerprint)
+        .toSet();
     if (pins.isEmpty) return;
     final candidates = hosts
         .where((host) {
@@ -359,6 +362,23 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
       // Discovery failure must not disable an otherwise working clipboard runtime.
     } finally {
       _refreshingAddresses = false;
+    }
+  }
+
+  /// Retry a disconnected peer using discovery hints authenticated by its pinned key.
+  Future<void> retryPeer(String fingerprint) async {
+    if (_busy || !_enabled || !_peers.any((p) => p.fingerprint == fingerprint && !p.pending) || _connectedPeers.contains(fingerprint)) return;
+    final previousRuntime = _runtime;
+    if (_discoveryHosts != null) await refreshDiscoveredAddresses(_discoveryHosts!(), fingerprint: fingerprint);
+    if (_busy || !_enabled || !_peers.any((p) => p.fingerprint == fingerprint && !p.pending) || _connectedPeers.contains(fingerprint)) return;
+    // Address refresh already restarts the runtime when it finds a new address.
+    if (_runtime != previousRuntime) return;
+    _busy = true;
+    try {
+      await _stop();
+      if (_enabled) await _start();
+    } finally {
+      _busy = false;
     }
   }
 

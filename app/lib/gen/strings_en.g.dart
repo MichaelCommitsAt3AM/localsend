@@ -146,6 +146,12 @@ class Translations$clipboardSync$en {
   /// en: 'Sharing paused'
   String get sharingPaused => 'Sharing paused';
 
+  /// en: 'Retry connection'
+  String get retryConnection => 'Retry connection';
+
+  /// en: 'Tries to reconnect this device. Other connections may briefly restart.'
+  String get retryConnectionHint => 'Tries to reconnect this device. Other connections may briefly restart.';
+
   /// en: 'Add your first device'
   String get noDevices => 'Add your first device';
 
@@ -423,9 +429,9 @@ class Translations$clipboardSync$en {
   /// en: 'Invalid or duplicate pairing code. Copy the complete code from the other device.'
   String get invalidCode => 'Invalid or duplicate pairing code. Copy the complete code from the other device.';
 
-  /// en: 'Windows–Android development build: direct LAN sync, with text up to 64 KiB and optional copied images up to 8 MiB / 16 megapixels. Android needs ADB-mode Shizuku on Android 13–16; some apps may not grant access to their copied images. Locked-screen capture and uninterrupted operation during sleep are not guaranteed. Re-pair if a saved IP address changes. Hosted relay and Linux integration are still pending.'
+  /// en: 'Windows–Android development build: direct LAN sync, with text up to 64 KiB and optional copied images up to 8 MiB / 16 megapixels. Android needs ADB-mode Shizuku on Android 13–17; some apps may not grant access to their copied images. Locked-screen capture and uninterrupted operation during sleep are not guaranteed. Re-pair if a saved IP address changes. Hosted relay and Linux integration are still pending.'
   String get limitations =>
-      'Windows–Android development build: direct LAN sync, with text up to 64 KiB and optional copied images up to 8 MiB / 16 megapixels. Android needs ADB-mode Shizuku on Android 13–16; some apps may not grant access to their copied images. Locked-screen capture and uninterrupted operation during sleep are not guaranteed. Re-pair if a saved IP address changes. Hosted relay and Linux integration are still pending.';
+      'Windows–Android development build: direct LAN sync, with text up to 64 KiB and optional copied images up to 8 MiB / 16 megapixels. Android needs ADB-mode Shizuku on Android 13–17; some apps may not grant access to their copied images. Locked-screen capture and uninterrupted operation during sleep are not guaranteed. Re-pair if a saved IP address changes. Hosted relay and Linux integration are still pending.';
 
   /// en: 'Setup tutorial'
   String get tutorial => 'Setup tutorial';

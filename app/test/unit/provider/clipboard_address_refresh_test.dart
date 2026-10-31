@@ -122,6 +122,22 @@ void main() {
       expect(calls, isNot(contains('saveSecret')));
     });
 
+    test('manual retry probes only the selected paired identity and rechecks authorization', () async {
+      final json = jsonDecode(stored) as Map<String, dynamic>;
+      json['peers'].add(ClipboardPeer(fingerprint: 'D' * 64, address: '192.0.2.2:53318').toJson());
+      stored = jsonEncode(json);
+      probe = (pins, hosts) async {
+        expect(pins, {identity});
+        return {};
+      };
+      await controller.initialize(discoveryHosts: () => ['172.16.185.127']);
+      calls.clear();
+      await controller.retryPeer(identity);
+      expect(calls, ['stop', 'status']);
+      expect(container.read(clipboardSyncProvider).enabled, true);
+      expect(container.read(clipboardSyncProvider).peers.first.address, '192.168.100.85:53318');
+    });
+
     test('disabled sharing does not probe discovered devices', () async {
       await controller.initialize();
       await controller.setEnabled(false);

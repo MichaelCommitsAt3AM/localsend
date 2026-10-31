@@ -53,6 +53,9 @@ class _Controller extends ClipboardSyncController {
   final ClipboardSyncState? initialState;
   int authorizationCalls = 0;
   bool authorized = true;
+  String? retriedPeer;
+  @override
+  Future<void> retryPeer(String fingerprint) async => retriedPeer = fingerprint;
   final pairingSession = _PairingSession();
   final enableCalls = <bool>[];
   @override
@@ -198,6 +201,35 @@ void main() {
       container.disposeContainer();
     });
   }
+
+  testWidgets('offline paired device offers a targeted retry', (tester) async {
+    final fingerprint = 'A' * 64;
+    final controller = _Controller(
+      ClipboardSyncState(
+        ready: true,
+        enabled: true,
+        running: true,
+        status: 'Waiting for paired devices',
+        peers: [ClipboardPeer(fingerprint: fingerprint, address: '192.0.2.1:53318', name: 'Phone')],
+      ),
+    );
+    final container = RefenaContainer(overrides: [clipboardSyncProvider.overrideWithNotifier((_) => controller)]);
+    await tester.pumpWidget(
+      RefenaScope.withContainer(
+        container: container,
+        child: const MaterialApp(home: ClipboardSyncPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Phone'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text(t.clipboardSync.retryConnection));
+    await tester.tap(find.text(t.clipboardSync.retryConnection));
+    await tester.pump();
+    expect(controller.retriedPeer, fingerprint);
+    await tester.pumpWidget(const SizedBox());
+    container.disposeContainer();
+  });
 
   testWidgets('clipboard settings and device controls remain usable with large text on a narrow phone', (tester) async {
     tester.view.physicalSize = const Size(360, 800);

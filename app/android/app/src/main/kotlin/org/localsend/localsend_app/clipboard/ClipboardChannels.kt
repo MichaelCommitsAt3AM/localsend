@@ -166,12 +166,12 @@ object ClipboardChannels {
         return true
     }
 
-    private fun allowed(): Boolean = Build.VERSION.SDK_INT in 33..36 && Shizuku.pingBinder() &&
+    private fun allowed(): Boolean = Build.VERSION.SDK_INT in 33..37 && Shizuku.pingBinder() &&
         Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED &&
         activity.get()?.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     private fun status(): Map<String, Any> = mapOf(
-        "supported" to (Build.VERSION.SDK_INT in 33..36),
+        "supported" to (Build.VERSION.SDK_INT in 33..37),
         "authorized" to allowed(),
         "running" to (ClipboardSyncService.instance != null),
         "sequence" to (ClipboardSyncService.instance?.sequence ?: 0L)
@@ -180,8 +180,8 @@ object ClipboardChannels {
     private fun authorize(result: MethodChannel.Result) {
         if (permissionResult != null || photoResult != null) { result.error("BUSY", "Permission request already open", null); return }
         val host = activity.get()
-        if (host == null || Build.VERSION.SDK_INT !in 33..36) {
-            result.error("SHIZUKU_UNAVAILABLE", "Start ADB-mode Shizuku on Android 13–16 first", null); return
+        if (host == null || Build.VERSION.SDK_INT !in 33..37) {
+            result.error("SHIZUKU_UNAVAILABLE", "Start ADB-mode Shizuku on Android 13–17 first", null); return
         }
         if (!Shizuku.pingBinder() || Shizuku.shouldShowRequestPermissionRationale()) {
             openShizuku(host, result)

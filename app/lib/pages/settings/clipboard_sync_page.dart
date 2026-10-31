@@ -407,6 +407,19 @@ class ClipboardSyncPage extends StatelessWidget {
                   value: peer.receive,
                   onChanged: peer.pending ? null : (value) => _setDirection(context, controller, fingerprint, receive: value),
                 ),
+                if (state.enabled && !peer.pending && !state.connectedPeers.contains(fingerprint)) ...[
+                  ListTile(
+                    leading: const Icon(Icons.refresh),
+                    title: Text(t.clipboardSync.retryConnection),
+                    subtitle: Text(t.clipboardSync.retryConnectionHint),
+                    onTap: () {
+                      final messenger = ScaffoldMessenger.of(context);
+                      Navigator.pop(context);
+                      messenger.showSnackBar(SnackBar(content: Text(t.clipboardSync.pairingWorking)));
+                      controller.retryPeer(fingerprint);
+                    },
+                  ),
+                ],
                 ExpansionTile(
                   title: Text(t.clipboardSync.details),
                   children: [

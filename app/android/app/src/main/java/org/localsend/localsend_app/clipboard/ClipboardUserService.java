@@ -57,7 +57,7 @@ public final class ClipboardUserService extends IClipboardProbe.Stub {
         cleanup();
         ownerUid = Binder.getCallingUid();
         if (Process.myUid() != 2000) return status("shell-mode-required");
-        if (Build.VERSION.SDK_INT < 33 || Build.VERSION.SDK_INT > 36) return status("unsupported-android-version");
+        if (Build.VERSION.SDK_INT < 33 || Build.VERSION.SDK_INT > 37) return status("unsupported-android-version");
         if (token == null || sink == null || requestedUser != ownerUid / 100000) return status("invalid-owner");
         try {
             int activeUser = (Integer) Class.forName("android.app.ActivityManager")
