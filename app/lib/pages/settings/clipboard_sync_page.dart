@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -416,7 +417,7 @@ class ClipboardSyncPage extends StatelessWidget {
                       final messenger = ScaffoldMessenger.of(context);
                       Navigator.pop(context);
                       messenger.showSnackBar(SnackBar(content: Text(t.clipboardSync.pairingWorking)));
-                      controller.retryPeer(fingerprint);
+                      unawaited(controller.retryPeer(fingerprint));
                     },
                   ),
                 ],
