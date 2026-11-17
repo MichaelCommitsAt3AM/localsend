@@ -45,7 +45,8 @@ pub struct StatefulDevice {
     pub device: DiscoveredDevice,
 
     /// Every channel the device was confirmed on, with its current status.
-    /// Starts with `Available`, the application is responsible
+    /// Starts with `Available` (or `Unverified` for an address only seen as
+    /// the source of an inbound request), the application is responsible
     /// to set it to `NotReachable` on error.
     pub channels: HashMap<DeviceChannel, ChannelStatus>,
 
@@ -60,6 +61,12 @@ pub struct StatefulDevice {
 pub enum ChannelStatus {
     /// The channel worked when it was last used.
     Available,
+
+    /// The address was only seen as the source of a request the device sent
+    /// to us (e.g. a register), and was never dialed successfully. Behind NAT
+    /// or a routed hop, such a source is not dialable back, so it ranks below
+    /// every verified channel; it is still used when it is the only one.
+    Unverified,
 
     /// The channel failed when it was last used. A re-confirmation over the
     /// channel makes it available again.
@@ -89,6 +96,17 @@ pub enum DeviceLogKind {
     Updated,
 }
 
+impl ChannelStatus {
+    /// Higher is better: verified, then unverified, then failed.
+    fn rank(self) -> u8 {
+        match self {
+            ChannelStatus::Available => 2,
+            ChannelStatus::Unverified => 1,
+            ChannelStatus::NotReachable => 0,
+        }
+    }
+}
+
 impl StatefulDevice {
     pub fn get_best_channel(&self) -> Option<&DeviceChannel> {
         self.get_ranked_channels().into_iter().next()
@@ -98,7 +116,7 @@ impl StatefulDevice {
         let mut channels: Vec<_> = self.channels.iter().collect();
         channels.sort_by_key(|(channel, status)| {
             std::cmp::Reverse((
-                **status == ChannelStatus::Available,
+                status.rank(),
                 channel.is_ipv6(),
                 self.last_confirmed(channel),
             ))
@@ -193,9 +211,22 @@ impl DeviceStore {
     /// Channels are merged by endpoint: a rediscovery over a known address
     /// replaces its channel (and makes it available again), an unknown
     /// address adds one.
+    #[cfg(test)]
     pub(super) fn upsert(
         &self,
         device: DiscoveredDevice,
+        timestamp: SystemTime,
+    ) -> (DiscoveryEvent, StatefulDevice) {
+        self.upsert_with_status(device, ChannelStatus::Available, timestamp)
+    }
+
+    /// Like [`DeviceStore::upsert`], with the status the confirmation gives
+    /// its channel. An `Unverified` confirmation never downgrades a known
+    /// `Available` channel of the same endpoint.
+    pub(super) fn upsert_with_status(
+        &self,
+        device: DiscoveredDevice,
+        status: ChannelStatus,
         timestamp: SystemTime,
     ) -> (DiscoveryEvent, StatefulDevice) {
         let mut devices = self.devices.lock().unwrap();
@@ -204,12 +235,18 @@ impl DeviceStore {
             .find(|known| known.device.fingerprint == device.fingerprint)
         {
             Some(known) => {
+                let was_available = known.channels.iter().any(|(channel, status)| {
+                    channel.same_endpoint(&device.channel) && *status == ChannelStatus::Available
+                });
+                let status = if status == ChannelStatus::Unverified && was_available {
+                    ChannelStatus::Available
+                } else {
+                    status
+                };
                 known
                     .channels
                     .retain(|channel, _| !channel.same_endpoint(&device.channel));
-                known
-                    .channels
-                    .insert(device.channel.clone(), ChannelStatus::Available);
+                known.channels.insert(device.channel.clone(), status);
 
                 known.logs.push(DeviceLog {
                     timestamp,
@@ -229,7 +266,7 @@ impl DeviceStore {
             }
             None => {
                 let known = StatefulDevice {
-                    channels: HashMap::from([(device.channel.clone(), ChannelStatus::Available)]),
+                    channels: HashMap::from([(device.channel.clone(), status)]),
                     logs: vec![DeviceLog {
                         timestamp,
                         kind: DeviceLogKind::Discovered,
@@ -480,6 +517,60 @@ mod tests {
             hosts,
             ["10.0.0.10", "192.168.0.10", "fe80::1%3"],
             "a not-reachable channel must sort last"
+        );
+    }
+
+    #[test]
+    fn test_unverified_source_ranks_below_verified_channels() {
+        let store = DeviceStore::new();
+
+        // Verified over the LAN, then a register arrives through a NAT hop.
+        store.upsert(device("a", "192.168.100.158"), SystemTime::now());
+        store.upsert_with_status(
+            device("a", "10.170.40.230"),
+            ChannelStatus::Unverified,
+            SystemTime::now(),
+        );
+
+        let known = store.by_fingerprint("a").unwrap();
+        assert_eq!(
+            channel_host(known.get_best_channel().unwrap()),
+            "192.168.100.158",
+            "a more recent unverified source must not beat a verified channel"
+        );
+    }
+
+    #[test]
+    fn test_unverified_source_is_used_when_it_is_the_only_channel() {
+        let store = DeviceStore::new();
+
+        store.upsert_with_status(
+            device("a", "192.168.0.10"),
+            ChannelStatus::Unverified,
+            SystemTime::now(),
+        );
+
+        let known = store.by_fingerprint("a").unwrap();
+        assert_eq!(
+            channel_host(known.get_best_channel().unwrap()),
+            "192.168.0.10"
+        );
+    }
+
+    #[test]
+    fn test_unverified_confirmation_keeps_a_verified_endpoint_available() {
+        let store = DeviceStore::new();
+
+        store.upsert(device("a", "192.168.0.10"), SystemTime::now());
+        let (_, known) = store.upsert_with_status(
+            device("a", "192.168.0.10"),
+            ChannelStatus::Unverified,
+            SystemTime::now(),
+        );
+
+        assert_eq!(
+            known.channels.values().collect::<Vec<_>>(),
+            [&ChannelStatus::Available]
         );
     }
 

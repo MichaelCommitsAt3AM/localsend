@@ -449,3 +449,79 @@ The rebuilt Android APK installed and launched successfully. The test profile's
 ls_color value was changed from system to localsend while the app was stopped,
 without clearing its preferences or clipboard pairing. Post-launch inspection
 confirmed localsend remained saved. Windows is running the rebuilt Debug bundle.
+
+## One-way Android-to-Windows failure from an unverified peer address
+
+Recorded 2026-11-17.
+
+### Symptom
+
+Windows-to-Android sends worked, and the phone listed the PC under Nearby
+devices, but every Android-to-Windows send and clipboard sync failed. Manual
+sends stayed on "Waiting for response…" and then reported
+`tcp connect error: Connection timed out (os error 110)` for
+`https://10.170.40.230:53317/api/localsend/v2/prepare-upload`. Clipboard sync
+reported that paired devices were unreachable. Force-stopping and restarting
+the Android app fixed it until the next occurrence.
+
+### Findings
+
+- Both devices were on the same LAN (Windows on Ethernet at 192.168.100.158,
+  the Galaxy A35 on Wi-Fi at 192.168.100.85). A LAN port scan found the phone's
+  LocalSend server, and the phone also had a mobile-data address (10.19.82.53).
+- 10.170.40.230 is not a Windows address. `tracert` showed it routes through
+  the LAN gateway into the internet provider's network, so the phone was
+  dialing an address outside the LAN.
+- The Windows firewall allowed the installed app on the active Public profile,
+  and the app listened on `0.0.0.0:53317`. The firewall was not the cause.
+- Root cause in `packages/core/src/discovery/store.rs`: when a peer sends a
+  register to this device's server, `receive_controller.dart` feeds the
+  request's **source address** into the discovery store through `add_device`,
+  without checking that it can be dialed back. Channels were ranked by
+  availability, then IPv6, then most recent confirmation, and nothing ever
+  marked a failing channel `NotReachable`. A routed or NAT-translated source,
+  refreshed by repeated registers, therefore outranked the LAN address the
+  phone had verified itself. `device.ip` (the top-ranked channel) is what
+  sends and clipboard address refresh dial. The store lives only in memory,
+  which is why a restart cleared it.
+- **Not established:** how the PC's registers came to arrive from
+  10.170.40.230. The PC could not reach the phone's mobile-data address on
+  port 53317, which argues against that path. The PC having been on another
+  network earlier, or an intermittent routed path, remain possible. The
+  in-memory evidence was lost to the restart.
+
+### Fix
+
+Added `ChannelStatus::Unverified`. `DiscoveryHandle::add_device`, used for
+inbound registers and the manual address dialog, now stores its channel as
+`Unverified`. Announcement answers and probes, which dial the peer, still
+store `Available`. Ranking is `Available` > `Unverified` > `NotReachable`,
+then IPv6, then recency. An unverified-only device is still dialed, and an
+unverified confirmation never downgrades an already verified endpoint. Three
+store unit tests cover the 192.168.100.158 vs 10.170.40.230 case, the
+unverified-only case and the no-downgrade case. Core tests pass apart from
+the existing Windows `formats_nanosecond_timestamp` failure. The CLI and
+plugin crate build.
+
+### Validation
+
+The arm64 debug APK was built with Flutter 3.41.9, installed over wireless ADB
+and launched as "Pretty Grape" after force-stopping the release app (both use
+port 53317). Device details showed `192.168.100.158:53317` with all
+confirmations on that address. A text send from the phone reached the Windows
+release app ("phone_to_pc_test") over an established 192.168.100.85 →
+192.168.100.158:53317 connection.
+APK SHA-256: `78AA4D166B6FEE55DB56E4A628B53FF358DEA65A9155E92458A7A07C09F20F60`.
+
+Not yet validated: the debug build never received a register from
+10.170.40.230 during the test, so the ranking under the original trigger is
+covered by unit tests only. The fix is not yet in a signed release, and
+the Windows app has the same store and benefits from the same update.
+
+### If it recurs
+
+Before force-stopping the app, open Send → ⓘ on the affected device and
+screenshot the Logs list: it shows every address the device was confirmed on
+and when. Also run `support/scripts/capture-connection-diagnostics.ps1` with
+the phone on ADB. A persistent, exportable connection log was considered and
+deferred until the issue recurs after this fix.

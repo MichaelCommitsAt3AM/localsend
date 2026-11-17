@@ -179,16 +179,22 @@ impl DiscoveryState {
         }
 
         let device = confirmed_device(response.body, host.to_string(), port, protocol, fingerprint);
-        let (_, merged) = self.found(device).await;
+        let (_, merged) = self.found(device, ChannelStatus::Available).await;
         Ok(Some(merged))
     }
 
     /// Puts a device into the store, logging the confirmation on it, and
     /// emits the resulting event. Returns whether the device is new, and
     /// its stored state after the merge.
-    async fn found(&self, device: DiscoveredDevice) -> (bool, StatefulDevice) {
+    async fn found(
+        &self,
+        device: DiscoveredDevice,
+        status: ChannelStatus,
+    ) -> (bool, StatefulDevice) {
         self.confirmations.fetch_add(1, Ordering::Relaxed);
-        let (event, merged) = self.store.upsert(device, SystemTime::now());
+        let (event, merged) = self
+            .store
+            .upsert_with_status(device, status, SystemTime::now());
         let is_new = matches!(event, DiscoveryEvent::Discovered { .. });
         if let Some(event_tx) = &self.event_tx {
             // Never wait for the application here. A subnet scan confirms up to
@@ -392,8 +398,13 @@ impl DiscoveryHandle {
     /// that answered an announcement by registering with this device's HTTP
     /// server. The confirmation is emitted as `Discovered` or `Updated`;
     /// returns `true` when the device is new.
+    ///
+    /// The channel is stored as [`ChannelStatus::Unverified`]: the source
+    /// address of an inbound request is not proof that the device can be
+    /// dialed there (NAT, routed hops), so it never outranks a channel this
+    /// device confirmed by dialing it.
     pub async fn add_device(&self, device: DiscoveredDevice) -> bool {
-        self.state.found(device).await.0
+        self.state.found(device, ChannelStatus::Unverified).await.0
     }
 
     /// All discovered devices in discovery order.
@@ -551,7 +562,7 @@ async fn answer_announcement(
                 message.protocol,
                 message.fingerprint,
             );
-            state.found(device).await;
+            state.found(device, ChannelStatus::Available).await;
         }
         Err(err) => {
             let url = format!("{}://{host}:{}", message.protocol.as_str(), message.port);
