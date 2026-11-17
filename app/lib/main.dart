@@ -6,6 +6,7 @@ import 'package:localsend_app/config/theme.dart';
 import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/model/persistence/color_mode.dart';
 import 'package:localsend_app/pages/home_page.dart';
+import 'package:localsend_app/provider/clipboard_sync_provider.dart';
 import 'package:localsend_app/provider/local_ip_provider.dart';
 import 'package:localsend_app/provider/network/server/server_provider.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
@@ -62,15 +63,14 @@ class LocalSendApp extends StatelessWidget {
     return TrayWatcher(
       child: WindowWatcher(
         child: LifeCycleWatcher(
+          checkConnections: () async {
+            await ref.notifier(serverProvider).ensureRunning();
+            await ref.notifier(clipboardSyncProvider).recoverDisconnected();
+          },
           onChangedState: (AppLifecycleState state) {
             switch (state) {
               case AppLifecycleState.resumed:
                 ref.redux(localIpProvider).dispatch(InitLocalIpAction());
-                if (checkPlatform([TargetPlatform.iOS, TargetPlatform.android])) {
-                  // The OS may have invalidated the sockets of the suspended app without any error ever reaching the accept loop.
-                  // ignore: discarded_futures
-                  ref.notifier(serverProvider).ensureRunning();
-                }
                 if (checkPlatform([TargetPlatform.iOS, TargetPlatform.android])) {
                   // The multicast sockets die the same silent way but cannot be probed, so always rebind them.
                   ref.redux(parentIsolateProvider).dispatch(IsolateDiscoveryRestartAction());

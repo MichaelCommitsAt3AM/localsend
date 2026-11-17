@@ -11,6 +11,7 @@ import 'package:localsend_app/provider/last_devices.provider.dart';
 import 'package:localsend_app/provider/local_ip_provider.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
 import 'package:localsend_app/widget/dialogs/error_dialog.dart';
+import 'package:localsend_isolates/isolate.dart';
 import 'package:localsend_isolates/model/device.dart';
 import 'package:localsend_isolates/rust/api/model.dart';
 import 'package:localsend_isolates/util/rust.dart';
@@ -107,6 +108,8 @@ class _AddressInputDialogState extends State<AddressInputDialog> with Refena {
     }
 
     if (foundDevice != null) {
+      // Share the confirmed endpoint with nearby discovery and clipboard address recovery.
+      ref.redux(parentIsolateProvider).dispatch(IsolateDiscoveryAddDeviceAction(device: foundDevice!));
       ref.redux(lastDevicesProvider).dispatch(AddLastDeviceAction(foundDevice!));
       context.pop(foundDevice);
     } else {

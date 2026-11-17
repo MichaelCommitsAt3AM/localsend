@@ -7,6 +7,7 @@ import 'package:localsend_app/gen/strings.g.dart';
 import 'package:localsend_app/util/clipboard_peer_probe.dart';
 import 'package:localsend_isolates/rust/api/clipboard.dart';
 import 'package:localsend_isolates/rust/api/crypto.dart' as rust_crypto;
+import 'package:logging/logging.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
 const clipboardSyncPort = 53318;
@@ -363,6 +364,21 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
     } finally {
       _refreshingAddresses = false;
     }
+  }
+
+  DateTime? _lastAutomaticRecovery;
+
+  /// A listener can silently die while the app retains its runtime handle.
+  /// Recreate it after a sustained total outage; never disrupt a connected peer.
+  Future<void> recoverDisconnected() async {
+    if (_pairingDisposed || _busy || !_enabled || !_connectionWarning || _connected > 0 || _pairingScreens > 0) return;
+    final now = DateTime.now();
+    if (_lastAutomaticRecovery != null && now.difference(_lastAutomaticRecovery!) < const Duration(seconds: 90)) return;
+    final peer = _peers.where((p) => !p.pending && (p.send || p.receive)).firstOrNull;
+    if (peer == null) return;
+    _lastAutomaticRecovery = now;
+    Logger('ClipboardSync').warning('Sustained clipboard disconnect; refreshing authenticated addresses and recreating runtime');
+    await retryPeer(peer.fingerprint);
   }
 
   /// Retry a disconnected peer using discovery hints authenticated by its pinned key.
@@ -777,6 +793,8 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
     } catch (_) {
       if (_runtime == runtime) {
         await _stop();
+        _connectionWarning = true;
+        Logger('ClipboardSync').warning('Clipboard update stream failed; runtime recovery scheduled');
         _publish('Clipboard connection stopped unexpectedly');
       }
     }
