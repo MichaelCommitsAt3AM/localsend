@@ -139,4 +139,4 @@ Slang, source files in `app/assets/i18n/` (`<locale>.json` plus `_missing_transl
 
 ## Release notes
 
-`app/pubspec.yaml`'s version must match `#define MyAppVersion` in `support/scripts/compile_windows_exe-inno.iss` and the `version` in `cli/Cargo.toml` (the CLI prints it in its start banner) — CI fails on a mismatch. Platform build commands and release steps are documented in `README.md` ("Building") and `CONTRIBUTING.md` ("Release").
+`app/pubspec.yaml`'s version must match `#define MyAppVersion` in `support/scripts/compile_windows_exe-inno.iss`, the `version` in `cli/Cargo.toml` (the CLI prints it in its start banner), the `version` in both `support/build/appimage/AppImageBuilder_*.yml` recipes, and the MSIX helper's `Identity Version` in `support/build/msix/content/AppxManifest.xml` (with a fourth `.0` component) — CI's packaging job fails on a mismatch. Platform build commands and release steps are documented in `README.md` ("Building") and `CONTRIBUTING.md` ("Release").
