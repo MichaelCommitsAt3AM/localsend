@@ -11,6 +11,12 @@ import 'package:logging/logging.dart';
 import 'package:refena_flutter/refena_flutter.dart';
 
 const clipboardSyncPort = 53318;
+
+/// Connection decisions only: never log clipboard contents.
+final _log = Logger('ClipboardSync');
+String _short(String fingerprint) => fingerprint.length > 8 ? fingerprint.substring(0, 8) : fingerprint;
+String _describePeers(Iterable<ClipboardPeer> peers) =>
+    peers.map((p) => '${_short(p.fingerprint)}@${p.address}${p.pending ? ' (pending)' : ''}').join(', ');
 final clipboardSyncProvider = NotifierProvider<ClipboardSyncController, ClipboardSyncState>(
   (ref) => ClipboardSyncController(),
   debugLabel: 'ClipboardSync',
@@ -100,6 +106,21 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   Iterable<String> Function()? _discoveryHosts;
   Timer? _addressTimer;
   bool _refreshingAddresses = false;
+  DateTime? _refreshStartedAt;
+  String? _lastSkip;
+  DateTime? _lastSkipAt;
+
+  /// Logs why an address refresh did not probe, once per change of reason
+  /// and at most every five minutes while it repeats.
+  void _skipRefresh(String reason) {
+    final now = DateTime.now();
+    if (reason == _lastSkip && _lastSkipAt != null && now.difference(_lastSkipAt!) < const Duration(minutes: 5)) return;
+    _lastSkip = reason;
+    _lastSkipAt = now;
+    final running = _refreshStartedAt == null ? '' : ' (refresh running since ${_refreshStartedAt!.toIso8601String()})';
+    _log.info('Address refresh skipped: $reason$running');
+  }
+
   static const _methods = MethodChannel('org.localsend.localsend_app/clipboard');
   static const _events = EventChannel('org.localsend.localsend_app/clipboard_events');
   String? _certificate;
@@ -300,7 +321,10 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   }
 
   Future<void> setPeers(List<ClipboardPeer> peers) async {
-    if (_busy || peers.length > 8 || peers.any((p) => p.fingerprint == _fingerprint)) return;
+    if (_busy || peers.length > 8 || peers.any((p) => p.fingerprint == _fingerprint)) {
+      _log.warning('Peer update rejected: busy=$_busy count=${peers.length}');
+      return;
+    }
     if (peers.map((p) => p.fingerprint).toSet().length != peers.length) return;
     _busy = true;
     try {
@@ -314,7 +338,8 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
       } else {
         _publish('Disabled');
       }
-    } catch (_) {
+    } catch (error) {
+      _log.warning('Peer configuration could not be saved', error);
       _enabled = false;
       _publish('Clipboard peer configuration could not be saved');
     } finally {
@@ -325,14 +350,21 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   /// File-transfer and clipboard certificates are independent. Never match by
   /// discovery fingerprint or alias: prove possession of the pinned clipboard key.
   Future<void> refreshDiscoveredAddresses(Iterable<String> hosts, {String? fingerprint}) async {
-    if (_refreshingAddresses || _busy || !_enabled || _certificate == null || _pairingDisposed) return;
+    if (_refreshingAddresses) return _skipRefresh('a refresh is already running');
+    if (_busy) return _skipRefresh('runtime is busy');
+    if (!_enabled) return _skipRefresh('sync disabled');
+    if (_certificate == null) return _skipRefresh('no clipboard identity');
+    if (_pairingDisposed) return _skipRefresh('controller disposed');
     final snapshot = _peers;
     final pins = snapshot
         .where((p) => !p.pending && !_connectedPeers.contains(p.fingerprint) && (fingerprint == null || p.fingerprint == fingerprint))
         .map((p) => p.fingerprint)
         .toSet();
-    if (pins.isEmpty) return;
-    final candidates = hosts
+    if (pins.isEmpty) {
+      return _skipRefresh('no disconnected paired device (peers: ${_describePeers(snapshot)}; connected: ${_connectedPeers.map(_short).join(', ')})');
+    }
+    final hostList = hosts.toList();
+    final candidates = hostList
         .where((host) {
           final ip = InternetAddress.tryParse(host);
           return ip != null && ip.type == InternetAddressType.IPv4 && !ip.isLoopback && !ip.isMulticast && host != '0.0.0.0';
@@ -340,15 +372,32 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
         .toSet()
         .take(64)
         .toList();
-    if (candidates.isEmpty) return;
+    if (candidates.isEmpty) return _skipRefresh('no IPv4 candidates among ${hostList.length} discovered hosts: ${hostList.take(16).join(', ')}');
+    _lastSkip = null;
     _refreshingAddresses = true;
+    _refreshStartedAt = DateTime.now();
+    final started = Stopwatch()..start();
+    _log.info('Probing ${candidates.length} hosts for ${pins.map(_short).join(', ')}: ${candidates.join(', ')}');
     try {
       final verified = await probePeers(_certificate!, _privateKey!, pins, candidates, clipboardSyncPort);
+      // Durations differ on every run; only mention slow probes, so repeated
+      // identical results collapse in the persistent log.
+      final slow = started.elapsed > const Duration(seconds: 5) ? ' (slow: ${started.elapsed.inSeconds} s)' : '';
+      _log.info(
+        'Probe finished$slow: '
+        '${verified.isEmpty ? 'no paired device verified' : verified.entries.map((e) => '${_short(e.key)}@${e.value}').join(', ')}',
+      );
       // Pairing, consent, and connection state may have changed during the probe.
-      if (_pairingDisposed || !_enabled || _busy || !identical(snapshot, _peers)) return;
+      if (_pairingDisposed || !_enabled || _busy || !identical(snapshot, _peers)) {
+        _log.warning(
+          'Probe result discarded: disposed=$_pairingDisposed enabled=$_enabled busy=$_busy peersChanged=${!identical(snapshot, _peers)}',
+        );
+        return;
+      }
       final peers = snapshot.map((peer) {
         final address = verified[peer.fingerprint];
         if (peer.pending || _connectedPeers.contains(peer.fingerprint) || address == null || address == peer.address) return peer;
+        _log.info('Updating ${_short(peer.fingerprint)} address ${peer.address} -> $address');
         return ClipboardPeer(
           fingerprint: peer.fingerprint,
           address: address,
@@ -359,10 +408,12 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
       }).toList();
       if (List.generate(peers.length, (i) => identical(peers[i], snapshot[i])).every((same) => same)) return;
       await setPeers(peers);
-    } catch (_) {
+    } catch (error) {
       // Discovery failure must not disable an otherwise working clipboard runtime.
+      _log.warning('Address refresh failed after ${started.elapsedMilliseconds} ms', error);
     } finally {
       _refreshingAddresses = false;
+      _refreshStartedAt = null;
     }
   }
 
@@ -377,18 +428,23 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
     final peer = _peers.where((p) => !p.pending && (p.send || p.receive)).firstOrNull;
     if (peer == null) return;
     _lastAutomaticRecovery = now;
-    Logger('ClipboardSync').warning('Sustained clipboard disconnect; refreshing authenticated addresses and recreating runtime');
+    _log.warning('Sustained clipboard disconnect; refreshing authenticated addresses and recreating runtime (peers: ${_describePeers(_peers)})');
     await retryPeer(peer.fingerprint);
   }
 
   /// Retry a disconnected peer using discovery hints authenticated by its pinned key.
   Future<void> retryPeer(String fingerprint) async {
-    if (_busy || !_enabled || !_peers.any((p) => p.fingerprint == fingerprint && !p.pending) || _connectedPeers.contains(fingerprint)) return;
+    if (_busy || !_enabled || !_peers.any((p) => p.fingerprint == fingerprint && !p.pending) || _connectedPeers.contains(fingerprint)) {
+      _log.info('Retry of ${_short(fingerprint)} skipped: busy=$_busy enabled=$_enabled connected=${_connectedPeers.contains(fingerprint)}');
+      return;
+    }
+    _log.info('Retrying ${_short(fingerprint)}');
     final previousRuntime = _runtime;
     if (_discoveryHosts != null) await refreshDiscoveredAddresses(_discoveryHosts!(), fingerprint: fingerprint);
     if (_busy || !_enabled || !_peers.any((p) => p.fingerprint == fingerprint && !p.pending) || _connectedPeers.contains(fingerprint)) return;
     // Address refresh already restarts the runtime when it finds a new address.
     if (_runtime != previousRuntime) return;
+    _log.info('Retry found no new address for ${_short(fingerprint)}; restarting runtime with ${_describePeers(_peers)}');
     _busy = true;
     try {
       await _stop();
@@ -602,6 +658,7 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
       final native = await _methods.invokeMapMethod<String, dynamic>('status');
       if (!_enabled) return;
       if (native?['supported'] != true || native?['authorized'] != true) {
+        _log.warning('Runtime not started: native clipboard supported=${native?['supported']} authorized=${native?['authorized']}');
         _publish('Authorize clipboard access first. Android requires ADB-mode Shizuku and notifications.');
         return;
       }
@@ -627,9 +684,12 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
         return;
       }
       _runtime = runtime;
+      _log.info('Runtime started on port $clipboardSyncPort with peers: ${_describePeers(_peers)}');
       if (_discoveryHosts != null) {
         _addressTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-          if (_refreshingAddresses || _busy || !_peers.any((p) => !p.pending && !_connectedPeers.contains(p.fingerprint))) return;
+          if (!_peers.any((p) => !p.pending && !_connectedPeers.contains(p.fingerprint))) return;
+          if (_refreshingAddresses) return _skipRefresh('a refresh is already running');
+          if (_busy) return _skipRefresh('runtime is busy');
           unawaited(refreshDiscoveredAddresses(_discoveryHosts!()));
         });
       }
@@ -639,7 +699,8 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
       _watchConnection();
       _publish('Waiting for paired devices');
       unawaited(_updates(runtime));
-    } catch (_) {
+    } catch (error) {
+      _log.warning('Runtime failed to start', error);
       await _stop();
       _publish('Clipboard sync could not start. Check port, pairing and native permissions.');
     }
@@ -742,12 +803,18 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
         final update = await runtime.nextUpdate(after: revision);
         if (_runtime != runtime) return;
         if (update == null) {
+          _log.warning('Runtime update stream ended');
           await _stop();
           _publish('Clipboard runtime stopped; disable and enable sync to restart');
           return;
         }
         revision = update.revision;
-        _connectedPeers = update.connectedPeers.toSet();
+        final connectedNow = update.connectedPeers.toSet();
+        if (connectedNow.length != _connectedPeers.length || !connectedNow.containsAll(_connectedPeers)) {
+          _log.info('Connected peers: ${connectedNow.isEmpty ? 'none' : connectedNow.map(_short).join(', ')}');
+        }
+        if (update.error != null) _log.info('Runtime: ${update.error}');
+        _connectedPeers = connectedNow;
         _connected = _connectedPeers.length;
         _watchConnection();
         _publish(update.error ?? (_connected > 0 ? 'Connected' : 'Waiting for paired devices'));
@@ -790,11 +857,11 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
           });
         }
       }
-    } catch (_) {
+    } catch (error) {
       if (_runtime == runtime) {
         await _stop();
         _connectionWarning = true;
-        Logger('ClipboardSync').warning('Clipboard update stream failed; runtime recovery scheduled');
+        _log.warning('Clipboard update stream failed; runtime recovery scheduled', error);
         _publish('Clipboard connection stopped unexpectedly');
       }
     }
@@ -810,6 +877,7 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
     } else if (_connectionTimer == null && _peers.any((p) => !p.pending && (p.send || p.receive))) {
       _connectionTimer = Timer(const Duration(seconds: 30), () {
         if (_runtime == null || _connected > 0) return;
+        _log.warning('No paired device connected for 30 s; showing connection warning (peers: ${_describePeers(_peers)})');
         _connectionWarning = true;
         _publish('Waiting for paired devices');
       });
@@ -817,6 +885,7 @@ class ClipboardSyncController extends PureNotifier<ClipboardSyncState> {
   }
 
   Future<void> _stop() async {
+    if (_runtime != null) _log.info('Runtime stopping');
     _addressTimer?.cancel();
     _addressTimer = null;
     final runtime = _runtime;

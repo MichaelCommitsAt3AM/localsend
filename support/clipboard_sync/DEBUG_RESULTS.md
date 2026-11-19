@@ -525,3 +525,63 @@ screenshot the Logs list: it shows every address the device was confirmed on
 and when. Also run `support/scripts/capture-connection-diagnostics.ps1` with
 the phone on ADB. A persistent, exportable connection log was considered and
 deferred until the issue recurs after this fix.
+
+## Clipboard sync stuck on a stale address after a network change
+
+Recorded 2026-11-19, on v1.0.6 (build 73) on both devices.
+
+### Symptom
+
+After both devices moved to a public Wi-Fi network (Windows 172.16.184.241,
+Galaxy A35 172.16.185.127, same /22), file transfer worked in both directions
+but clipboard sync never connected and showed "Cannot reach your paired
+devices". Reopening the app without a force-stop did not help. The user reports
+that a force-stop and restart fixes it.
+
+### Findings
+
+- Both runtimes listened on 53318, TCP to 53318 worked in both directions, and
+  the PC's clipboard server completed TLS and presented the pinned identity
+  (`5E6A5225…494649`), the same one the phone has saved. The network, firewall
+  and pairing were ruled out.
+- The phone's saved clipboard address for the PC was still
+  `192.168.100.158:53318` from the previous network, and its runtime kept dialing it.
+  The phone is the canonical initiator (lower identity), so only its saved
+  address matters.
+- Over two minutes, including two automatic recovery cycles and a manual
+  **Retry connection**, the PC probed the phone every 10 seconds, but the phone
+  never probed the PC. Its address refresh returned before probing every time,
+  then the retry restarted the runtime with the stale address.
+- That refresh has three silent early returns: no IPv4 candidates from nearby
+  discovery, no disconnected paired device, or a refresh already marked as running.
+  Which one applied could not be determined: the release app logs none of them,
+  and wireless ADB dropped before more state could be read.
+
+### Logging added
+
+- `app/lib/util/connection_log.dart` mirrors the main isolate's connection
+  loggers (`ClipboardSync`, `ConnectionHealth`, `Discovery`, `NetworkInfo`,
+  `ReceiveController`, `Send`, `Server`) at INFO and above to a persistent file.
+  It records no clipboard contents and no Refena state dumps (which contain the
+  show token). The file is capped at 1 MB with one rotated copy, and identical
+  messages within five minutes are written once.
+- Clipboard sync now logs every refresh skip with its reason (once per change,
+  then every five minutes, including how long a running refresh has been held),
+  each probe's candidates and per-host outcome (connect/TLS failure or timeout,
+  unpinned identity, verified), discarded results with the guard that discarded
+  them, address changes, retries, runtime start/stop with peer addresses,
+  connected-peer changes, runtime errors and the 30-second connection warning.
+- Locations:
+  - Android: `/sdcard/Android/data/org.localsend.localsend_app/files/logs/connection.log`
+    (and `.1`), pulled with `adb pull`.
+  - Windows: `connection.log` in the app support folder's `logs` directory,
+    expected at `%APPDATA%\Tien Do Nam\LocalSend\logs`.
+- `support/scripts/capture-connection-diagnostics.ps1` now also collects both
+  logs.
+
+### If it recurs
+
+Before force-stopping, pull the phone log (or run the diagnostics script).
+Then search it for `Address refresh skipped:`, which names the guard, and for
+`Probe` lines. If the reason is "a refresh is already running", the log also
+says since when.

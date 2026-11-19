@@ -33,5 +33,13 @@ if ($PhoneIp) {
         } finally { $client.Dispose() }
     }
 }
+# Persistent connection logs (since 1.0.7) survive restarts, so collect them even after a force-stop.
+$phoneLogs = '/sdcard/Android/data/org.localsend.localsend_app/files/logs'
+foreach ($name in 'connection.log', 'connection.log.1') {
+    adb pull "$phoneLogs/$name" (Join-Path $OutputDirectory "phone-$name") 2>&1 | Out-Null
+}
+Get-ChildItem $env:APPDATA -Recurse -Depth 4 -Filter 'connection.log*' -ErrorAction SilentlyContinue |
+    Where-Object { $_.Directory.Name -eq 'logs' } |
+    ForEach-Object { Copy-Item $_.FullName (Join-Path $OutputDirectory "pc-$($_.Name)") }
 Write-Output "Diagnostics saved to $OutputDirectory"
 
