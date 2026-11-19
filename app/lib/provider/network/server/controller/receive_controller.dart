@@ -23,6 +23,7 @@ import 'package:localsend_app/provider/selection/selected_receiving_files_provid
 import 'package:localsend_app/provider/selection/selected_sending_files_provider.dart';
 import 'package:localsend_app/provider/settings_provider.dart';
 import 'package:localsend_app/util/native/directories.dart';
+import 'package:localsend_app/util/native/incoming_request_notifier.dart';
 import 'package:localsend_app/util/native/platform_check.dart';
 import 'package:localsend_app/util/native/tray_helper.dart';
 import 'package:localsend_app/widget/dialogs/open_file_dialog.dart';
@@ -156,6 +157,14 @@ class ReceiveController {
       });
       return;
     }
+
+    // Only a request that waits for the user's decision needs attention; quick save returned above.
+    unawaited(
+      IncomingRequestNotifier.notifyIfBackground(
+        senderAlias: server.getState().session?.senderAlias ?? event.info.alias,
+        fileCount: files.length,
+      ),
+    );
 
     if (checkPlatformHasTray() && (await windowManager.isMinimized() || !(await windowManager.isVisible()) || !(await windowManager.isFocused()))) {
       await showFromTray();
